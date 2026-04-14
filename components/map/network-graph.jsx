@@ -16,6 +16,8 @@ import { useMapStore } from "@/store/use-map-store";
 import { useFilteredData } from "@/hooks/use-filtered-data";
 import { CONNECTION_TYPES, getConnectionType } from "@/lib/constants";
 import { SystemNodePopover } from "@/components/map/system-popover";
+import { ParallelRelationshipEdge } from "@/components/map/parallel-relationship-edge";
+import { TypedSystemNode } from "@/components/map/typed-system-node";
 import { SystemForm } from "@/components/systems/system-form";
 import {
   AlertDialog,
@@ -73,6 +75,7 @@ function NetworkGraphInner({
   connectionTypeFilter,
   searchQuery,
   layoutDirection,
+  edgeDisplayMode,
   layoutKey,
   fitViewKey,
   onStatsChange,
@@ -96,8 +99,22 @@ function NetworkGraphInner({
   });
   const [editSystemTarget, setEditSystemTarget] = useState(null);
   const [deleteSystemTarget, setDeleteSystemTarget] = useState(null);
+  const [groupedEdgeDetails, setGroupedEdgeDetails] = useState(null);
   const contextMenuRef = useRef(null);
   const relationshipTypeMenuRef = useRef(null);
+  const groupedEdgeDetailsRef = useRef(null);
+  const edgeTypes = useMemo(
+    () => ({
+      parallelRelationship: ParallelRelationshipEdge,
+    }),
+    []
+  );
+  const nodeTypes = useMemo(
+    () => ({
+      typedSystem: TypedSystemNode,
+    }),
+    []
+  );
 
   const filteredSystems = useMemo(() => {
     if (domainFilter.length === 0) return systems;
@@ -108,6 +125,10 @@ function NetworkGraphInner({
 
   const filteredSystemIds = useMemo(
     () => new Set(filteredSystems.map((s) => s.id)),
+    [filteredSystems]
+  );
+  const filteredSystemsById = useMemo(
+    () => new Map(filteredSystems.map((sys) => [sys.id, sys])),
     [filteredSystems]
   );
 
@@ -150,53 +171,135 @@ function NetworkGraphInner({
 
       return {
         id: sys.id,
+        type: "typedSystem",
         data: {
           label: sys.name,
           system: sys,
           color,
+          isMatch,
+          dimmed,
+          layoutDirection,
         },
         position: { x: 0, y: 0 },
         style: {
-          background: color,
+          background: "transparent",
           color: "#fff",
-          border: isMatch ? "2px solid #fff" : "none",
+          border: "none",
           borderRadius: "8px",
-          padding: "8px 16px",
+          padding: 0,
           fontSize: "13px",
           fontWeight: 500,
           width: NODE_WIDTH,
           textAlign: "center",
-          opacity: dimmed ? 0.25 : 1,
-          boxShadow: isMatch ? `0 0 12px ${color}` : undefined,
-          transition: "opacity 0.2s, box-shadow 0.2s",
+          transition: "opacity 0.2s",
         },
       };
     });
 
-    const rawEdges = filteredConnections.map((conn) => {
-      const ct = getConnectionType(conn.type);
-      const edgeColor = ct?.color || "#94a3b8";
-      return {
-        id: conn.id,
-        source: conn.sourceId,
-        target: conn.targetId,
-        label: ct?.label || conn.type,
-        type: ct?.directional ? "default" : "straight",
-        animated: conn.type === "feeds_into" || conn.type === "depends_on",
-        style: { stroke: edgeColor, strokeWidth: 1.5 },
-        labelStyle: { fontSize: 10, fill: edgeColor },
-        markerEnd: ct?.directional
-          ? { type: "arrowclosed", color: edgeColor }
-          : undefined,
-      };
-    });
+    const groupedByDirection = new Map();
+    for (const conn of filteredConnections) {
+      const key = `${conn.sourceId}::${conn.targetId}`;
+      if (!groupedByDirection.has(key)) {
+        groupedByDirection.set(key, []);
+      }
+      groupedByDirection.get(key).push(conn);
+    }
+
+    const rawEdges = [];
+
+    for (const group of groupedByDirection.values()) {
+      const sortedGroup = [...group].sort(
+        (a, b) => a.type.localeCompare(b.type) || a.id.localeCompare(b.id)
+      );
+
+      if (edgeDisplayMode === "grouped") {
+        const relationships = sortedGroup.map((conn) => {
+          const ct = getConnectionType(conn.type);
+          return {
+            id: conn.id,
+            type: conn.type,
+            label: ct?.label || conn.type,
+            color: ct?.color || "#94a3b8",
+          };
+        });
+        const hasDirectional = sortedGroup.some(
+          (conn) => getConnectionType(conn.type)?.directional
+        );
+        const edgeColor =
+          relationships.length === 1 ? relationships[0].color : "#64748b";
+        const source = sortedGroup[0].sourceId;
+        const target = sortedGroup[0].targetId;
+        const sourceSystem = filteredSystemsById.get(source);
+        const targetSystem = filteredSystemsById.get(target);
+
+        rawEdges.push({
+          id: `grouped-${source}-${target}`,
+          source,
+          target,
+          sourceHandle: "out-generic",
+          targetHandle: "in-generic",
+          label:
+            relationships.length === 1
+              ? relationships[0].label
+              : `${relationships.length} relationships`,
+          type: "default",
+          animated: sortedGroup.some(
+            (conn) => conn.type === "feeds_into" || conn.type === "depends_on"
+          ),
+          style: { stroke: edgeColor, strokeWidth: 2.2 },
+          labelStyle: { fontSize: 10, fill: edgeColor },
+          markerEnd: hasDirectional
+            ? { type: "arrowclosed", color: edgeColor }
+            : undefined,
+          data: {
+            groupedRelationships: relationships,
+            sourceName: sourceSystem?.name || "Unknown",
+            targetName: targetSystem?.name || "Unknown",
+          },
+        });
+        continue;
+      }
+
+      sortedGroup.forEach((conn, index) => {
+        const ct = getConnectionType(conn.type);
+        const edgeColor = ct?.color || "#94a3b8";
+        rawEdges.push({
+          id: conn.id,
+          source: conn.sourceId,
+          target: conn.targetId,
+          sourceHandle: `out-${conn.type}`,
+          targetHandle: `in-${conn.type}`,
+          label: ct?.label || conn.type,
+          type: "parallelRelationship",
+          animated: conn.type === "feeds_into" || conn.type === "depends_on",
+          style: { stroke: edgeColor, strokeWidth: 1.8 },
+          labelStyle: { fontSize: 10, fill: edgeColor },
+          markerEnd: ct?.directional
+            ? { type: "arrowclosed", color: edgeColor }
+            : undefined,
+          data: {
+            parallelIndex: index,
+            parallelCount: sortedGroup.length,
+          },
+        });
+      });
+    }
 
     if (rawNodes.length === 0) return { initialNodes: [], initialEdges: [] };
 
     const layout = getLayoutedElements(rawNodes, rawEdges, layoutDirection);
     return { initialNodes: layout.nodes, initialEdges: layout.edges };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredSystems, filteredConnections, domains, layoutDirection, layoutKey, matchingSystemIds]);
+  }, [
+    filteredSystems,
+    filteredConnections,
+    filteredSystemsById,
+    domains,
+    layoutDirection,
+    layoutKey,
+    matchingSystemIds,
+    edgeDisplayMode,
+  ]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -253,6 +356,14 @@ function NetworkGraphInner({
       ) {
         setRelationshipTarget(null);
       }
+
+      if (
+        groupedEdgeDetails &&
+        groupedEdgeDetailsRef.current &&
+        !groupedEdgeDetailsRef.current.contains(event.target)
+      ) {
+        setGroupedEdgeDetails(null);
+      }
     }
 
     function handleKeyDown(event) {
@@ -260,6 +371,7 @@ function NetworkGraphInner({
         setContextMenu(null);
         setSelectedNode(null);
         setRelationshipTarget(null);
+        setGroupedEdgeDetails(null);
         if (relationshipSource) {
           resetRelationshipFlow();
         }
@@ -272,10 +384,17 @@ function NetworkGraphInner({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [contextMenu, relationshipTarget, relationshipSource, resetRelationshipFlow]);
+  }, [
+    contextMenu,
+    relationshipTarget,
+    relationshipSource,
+    groupedEdgeDetails,
+    resetRelationshipFlow,
+  ]);
 
   const onNodeClick = useCallback((event, node) => {
     setContextMenu(null);
+    setGroupedEdgeDetails(null);
     if (relationshipSource) {
       if (node.id === relationshipSource.id) {
         toast.error("Select a different node to create this relationship");
@@ -297,6 +416,7 @@ function NetworkGraphInner({
     event.stopPropagation();
     setSelectedNode(null);
     setRelationshipTarget(null);
+    setGroupedEdgeDetails(null);
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -308,10 +428,30 @@ function NetworkGraphInner({
     setSelectedNode(null);
     setContextMenu(null);
     setRelationshipTarget(null);
+    setGroupedEdgeDetails(null);
     if (relationshipSource) {
       resetRelationshipFlow();
     }
   }, [relationshipSource, resetRelationshipFlow]);
+
+  const onEdgeClick = useCallback(
+    (event, edge) => {
+      if (edgeDisplayMode !== "grouped") return;
+      const groupedRelationships = edge.data?.groupedRelationships;
+      if (!groupedRelationships || groupedRelationships.length === 0) return;
+      setSelectedNode(null);
+      setContextMenu(null);
+      setRelationshipTarget(null);
+      setGroupedEdgeDetails({
+        x: event.clientX,
+        y: event.clientY,
+        sourceName: edge.data?.sourceName || "Unknown",
+        targetName: edge.data?.targetName || "Unknown",
+        relationships: groupedRelationships,
+      });
+    },
+    [edgeDisplayMode]
+  );
 
   const handleContextMenuAction = useCallback((action) => {
     if (!contextMenu?.system) return;
@@ -387,9 +527,12 @@ function NetworkGraphInner({
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        edgeTypes={edgeTypes}
+        nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         fitView
@@ -491,6 +634,32 @@ function NetworkGraphInner({
               <div className="text-xs text-muted-foreground">{connectionType.description}</div>
             </button>
           ))}
+        </div>
+      )}
+
+      {groupedEdgeDetails && (
+        <div
+          ref={groupedEdgeDetailsRef}
+          className="fixed z-50 min-w-64 rounded-md border bg-popover p-2 shadow-lg"
+          style={{ left: groupedEdgeDetails.x, top: groupedEdgeDetails.y }}
+        >
+          <div className="mb-2 px-1 text-xs text-muted-foreground">
+            {groupedEdgeDetails.sourceName} &rarr; {groupedEdgeDetails.targetName}
+          </div>
+          <div className="space-y-1">
+            {groupedEdgeDetails.relationships.map((relationship) => (
+              <div
+                key={relationship.id}
+                className="flex items-center gap-2 rounded-sm px-2 py-1 text-sm"
+              >
+                <span
+                  className="inline-block size-2 rounded-full"
+                  style={{ backgroundColor: relationship.color }}
+                />
+                <span>{relationship.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

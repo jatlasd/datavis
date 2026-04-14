@@ -19,6 +19,8 @@ export function MapToolbar({
   onToggleDirection,
   onRelayout,
   onFitView,
+  edgeDisplayMode,
+  onEdgeDisplayModeChange,
   stats,
   hasFilters,
 }) {
@@ -109,6 +111,33 @@ export function MapToolbar({
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-md border p-0.5">
+            <button
+              type="button"
+              onClick={() => onEdgeDisplayModeChange("separate")}
+              className={`h-6 rounded px-2 text-xs ${
+                edgeDisplayMode === "separate"
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Separate
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdgeDisplayModeChange("grouped")}
+              className={`h-6 rounded px-2 text-xs ${
+                edgeDisplayMode === "grouped"
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Grouped
+            </button>
+          </div>
+
+          <div className="h-4 w-px bg-border" />
+
           <Button
             variant="ghost"
             size="sm"

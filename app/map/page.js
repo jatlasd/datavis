@@ -9,6 +9,7 @@ export default function MapPage() {
   const [connectionTypeFilter, setConnectionTypeFilter] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [layoutDirection, setLayoutDirection] = useState("LR");
+  const [edgeDisplayMode, setEdgeDisplayMode] = useState("separate");
   const [layoutKey, setLayoutKey] = useState(0);
   const [fitViewKey, setFitViewKey] = useState(0);
   const [stats, setStats] = useState({
@@ -45,6 +46,8 @@ export default function MapPage() {
         onToggleDirection={handleToggleDirection}
         onRelayout={handleRelayout}
         onFitView={handleFitView}
+        edgeDisplayMode={edgeDisplayMode}
+        onEdgeDisplayModeChange={setEdgeDisplayMode}
         stats={stats}
         hasFilters={hasFilters}
       />
@@ -54,6 +57,7 @@ export default function MapPage() {
           connectionTypeFilter={connectionTypeFilter}
           searchQuery={searchQuery}
           layoutDirection={layoutDirection}
+          edgeDisplayMode={edgeDisplayMode}
           layoutKey={layoutKey}
           fitViewKey={fitViewKey}
           onStatsChange={setStats}
