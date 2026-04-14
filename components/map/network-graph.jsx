@@ -14,8 +14,21 @@ import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 import { useMapStore } from "@/store/use-map-store";
 import { useFilteredData } from "@/hooks/use-filtered-data";
-import { getConnectionType } from "@/lib/constants";
+import { CONNECTION_TYPES, getConnectionType } from "@/lib/constants";
 import { SystemNodePopover } from "@/components/map/system-popover";
+import { SystemForm } from "@/components/systems/system-form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 50;
@@ -66,11 +79,25 @@ function NetworkGraphInner({
 }) {
   const allSystems = useMapStore((s) => s.systems);
   const allConnections = useMapStore((s) => s.connections);
+  const addConnection = useMapStore((s) => s.addConnection);
+  const connectionExists = useMapStore((s) => s.connectionExists);
+  const deleteSystem = useMapStore((s) => s.deleteSystem);
   const { systems, domains, connections } = useFilteredData();
   const { fitView, setCenter, getNodes } = useReactFlow();
 
   const [selectedNode, setSelectedNode] = useState(null);
   const [popoverPos, setPopoverPos] = useState({ x: 0, y: 0 });
+  const [contextMenu, setContextMenu] = useState(null);
+  const [relationshipSource, setRelationshipSource] = useState(null);
+  const [relationshipTarget, setRelationshipTarget] = useState(null);
+  const [relationshipTypeMenuPos, setRelationshipTypeMenuPos] = useState({
+    x: 0,
+    y: 0,
+  });
+  const [editSystemTarget, setEditSystemTarget] = useState(null);
+  const [deleteSystemTarget, setDeleteSystemTarget] = useState(null);
+  const contextMenuRef = useRef(null);
+  const relationshipTypeMenuRef = useRef(null);
 
   const filteredSystems = useMemo(() => {
     if (domainFilter.length === 0) return systems;
@@ -204,14 +231,140 @@ function NetworkGraphInner({
     }
   }, [matchingSystemIds, getNodes, setCenter]);
 
+  const resetRelationshipFlow = useCallback(() => {
+    setRelationshipSource(null);
+    setRelationshipTarget(null);
+  }, []);
+
+  useEffect(() => {
+    function handlePointerDown(event) {
+      if (
+        contextMenu &&
+        contextMenuRef.current &&
+        !contextMenuRef.current.contains(event.target)
+      ) {
+        setContextMenu(null);
+      }
+
+      if (
+        relationshipTarget &&
+        relationshipTypeMenuRef.current &&
+        !relationshipTypeMenuRef.current.contains(event.target)
+      ) {
+        setRelationshipTarget(null);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+        setSelectedNode(null);
+        setRelationshipTarget(null);
+        if (relationshipSource) {
+          resetRelationshipFlow();
+        }
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu, relationshipTarget, relationshipSource, resetRelationshipFlow]);
+
   const onNodeClick = useCallback((event, node) => {
+    setContextMenu(null);
+    if (relationshipSource) {
+      if (node.id === relationshipSource.id) {
+        toast.error("Select a different node to create this relationship");
+        return;
+      }
+
+      setSelectedNode(null);
+      setRelationshipTarget(node.data.system);
+      setRelationshipTypeMenuPos({ x: event.clientX, y: event.clientY });
+      return;
+    }
+
     setSelectedNode(node.data.system);
     setPopoverPos({ x: event.clientX, y: event.clientY });
+  }, [relationshipSource]);
+
+  const onNodeContextMenu = useCallback((event, node) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedNode(null);
+    setRelationshipTarget(null);
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      system: node.data.system,
+    });
   }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
-  }, []);
+    setContextMenu(null);
+    setRelationshipTarget(null);
+    if (relationshipSource) {
+      resetRelationshipFlow();
+    }
+  }, [relationshipSource, resetRelationshipFlow]);
+
+  const handleContextMenuAction = useCallback((action) => {
+    if (!contextMenu?.system) return;
+
+    if (action === "create-relationship") {
+      setRelationshipSource(contextMenu.system);
+      setRelationshipTarget(null);
+      setContextMenu(null);
+      setSelectedNode(null);
+      return;
+    }
+
+    if (action === "rename-node" || action === "edit-properties") {
+      setEditSystemTarget(contextMenu.system);
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "delete-node") {
+      setDeleteSystemTarget(contextMenu.system);
+      setContextMenu(null);
+    }
+  }, [contextMenu]);
+
+  const handleRelationshipTypeSelect = useCallback((type) => {
+    if (!relationshipSource || !relationshipTarget) return;
+
+    if (connectionExists(relationshipSource.id, relationshipTarget.id, type)) {
+      toast.error("This connection already exists");
+      return;
+    }
+
+    addConnection({
+      sourceId: relationshipSource.id,
+      targetId: relationshipTarget.id,
+      type,
+      note: null,
+    });
+    toast.success(`Connected "${relationshipSource.name}" to "${relationshipTarget.name}"`);
+    resetRelationshipFlow();
+  }, [addConnection, connectionExists, relationshipSource, relationshipTarget, resetRelationshipFlow]);
+
+  const handleDeleteSystem = useCallback(() => {
+    if (!deleteSystemTarget) return;
+    const name = deleteSystemTarget.name;
+    deleteSystem(deleteSystemTarget.id);
+    setDeleteSystemTarget(null);
+    setSelectedNode(null);
+    if (relationshipSource?.id === deleteSystemTarget.id || relationshipTarget?.id === deleteSystemTarget.id) {
+      resetRelationshipFlow();
+    }
+    toast.success(`"${name}" deleted`);
+  }, [deleteSystem, deleteSystemTarget, relationshipSource, relationshipTarget, resetRelationshipFlow]);
 
   if (allSystems.length === 0) {
     return (
@@ -237,6 +390,7 @@ function NetworkGraphInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}
@@ -260,6 +414,117 @@ function NetworkGraphInner({
           onClose={() => setSelectedNode(null)}
         />
       )}
+
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 min-w-52 rounded-md border bg-popover p-1 shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {contextMenu.system.name}
+          </div>
+          <button
+            type="button"
+            className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction("create-relationship")}
+          >
+            Create Relationship
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction("rename-node")}
+          >
+            Rename Node
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onClick={() => handleContextMenuAction("edit-properties")}
+          >
+            Edit Properties
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"
+            onClick={() => handleContextMenuAction("delete-node")}
+          >
+            Delete Node
+          </button>
+        </div>
+      )}
+
+      {relationshipSource && (
+        <div className="absolute left-3 top-3 z-40 flex items-center gap-2 rounded-md border bg-background/95 px-3 py-2 text-sm shadow-sm">
+          <span>
+            Creating relationship from <strong>{relationshipSource.name}</strong>. Click a target node.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={resetRelationshipFlow}
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {relationshipSource && relationshipTarget && (
+        <div
+          ref={relationshipTypeMenuRef}
+          className="fixed z-50 min-w-64 rounded-md border bg-popover p-1 shadow-lg"
+          style={{ left: relationshipTypeMenuPos.x, top: relationshipTypeMenuPos.y }}
+        >
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {relationshipSource.name} &rarr; {relationshipTarget.name}
+          </div>
+          {CONNECTION_TYPES.map((connectionType) => (
+            <button
+              key={connectionType.value}
+              type="button"
+              className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+              onClick={() => handleRelationshipTypeSelect(connectionType.value)}
+            >
+              <div>{connectionType.label}</div>
+              <div className="text-xs text-muted-foreground">{connectionType.description}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <SystemForm
+        open={Boolean(editSystemTarget)}
+        onOpenChange={(open) => {
+          if (!open) setEditSystemTarget(null);
+        }}
+        system={editSystemTarget}
+      />
+
+      <AlertDialog
+        open={Boolean(deleteSystemTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteSystemTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete &ldquo;{deleteSystemTarget?.name}&rdquo;?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the system and all its connections. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDeleteSystem}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
