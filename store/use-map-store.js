@@ -116,6 +116,14 @@ export const useMapStore = create(
         return connection;
       },
 
+      updateConnection: (id, data) => {
+        set((s) => ({
+          connections: s.connections.map((c) =>
+            c.id === id ? { ...c, ...data } : c
+          ),
+        }));
+      },
+
       deleteConnection: (id) => {
         set((s) => ({
           connections: s.connections.filter((c) => c.id !== id),

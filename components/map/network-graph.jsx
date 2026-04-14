@@ -30,10 +30,27 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 50;
+const MUTED_EDGE_COLOR = "#9ca3af";
 
 function getLayoutedElements(nodes, edges, direction = "LR") {
   const g = new dagre.graphlib.Graph();
@@ -83,6 +100,7 @@ function NetworkGraphInner({
   const allSystems = useMapStore((s) => s.systems);
   const allConnections = useMapStore((s) => s.connections);
   const addConnection = useMapStore((s) => s.addConnection);
+  const updateConnection = useMapStore((s) => s.updateConnection);
   const connectionExists = useMapStore((s) => s.connectionExists);
   const deleteSystem = useMapStore((s) => s.deleteSystem);
   const { systems, domains, connections } = useFilteredData();
@@ -100,6 +118,9 @@ function NetworkGraphInner({
   const [editSystemTarget, setEditSystemTarget] = useState(null);
   const [deleteSystemTarget, setDeleteSystemTarget] = useState(null);
   const [groupedEdgeDetails, setGroupedEdgeDetails] = useState(null);
+  const [editingConnectionId, setEditingConnectionId] = useState(null);
+  const [editingConnectionType, setEditingConnectionType] = useState("");
+  const [editingConnectionNote, setEditingConnectionNote] = useState("");
   const contextMenuRef = useRef(null);
   const relationshipTypeMenuRef = useRef(null);
   const groupedEdgeDetailsRef = useRef(null);
@@ -131,16 +152,44 @@ function NetworkGraphInner({
     () => new Map(filteredSystems.map((sys) => [sys.id, sys])),
     [filteredSystems]
   );
+  const allConnectionsById = useMemo(
+    () => new Map(allConnections.map((connection) => [connection.id, connection])),
+    [allConnections]
+  );
+  const allSystemsById = useMemo(
+    () => new Map(allSystems.map((system) => [system.id, system])),
+    [allSystems]
+  );
 
-  const filteredConnections = useMemo(() => {
+  const visibleConnections = useMemo(() => {
     return connections.filter((c) => {
       if (!filteredSystemIds.has(c.sourceId) || !filteredSystemIds.has(c.targetId))
         return false;
-      if (connectionTypeFilter.length > 0 && !connectionTypeFilter.includes(c.type))
-        return false;
       return true;
     });
-  }, [connections, filteredSystemIds, connectionTypeFilter]);
+  }, [connections, filteredSystemIds]);
+
+  const connectionMatchesFilters = useCallback(
+    (connection) => {
+      const sourceSystem = filteredSystemsById.get(connection.sourceId);
+      const targetSystem = filteredSystemsById.get(connection.targetId);
+      if (!sourceSystem || !targetSystem) return false;
+      const matchesDomain =
+        domainFilter.length === 0 ||
+        (sourceSystem.domainIds.some((id) => domainFilter.includes(id)) &&
+          targetSystem.domainIds.some((id) => domainFilter.includes(id)));
+      const matchesType =
+        connectionTypeFilter.length === 0 ||
+        connectionTypeFilter.includes(connection.type);
+      return matchesDomain && matchesType;
+    },
+    [connectionTypeFilter, domainFilter, filteredSystemsById]
+  );
+
+  const filteredConnections = useMemo(
+    () => visibleConnections.filter((connection) => connectionMatchesFilters(connection)),
+    [visibleConnections, connectionMatchesFilters]
+  );
 
   useEffect(() => {
     onStatsChange?.({
@@ -197,7 +246,7 @@ function NetworkGraphInner({
     });
 
     const groupedByDirection = new Map();
-    for (const conn of filteredConnections) {
+    for (const conn of visibleConnections) {
       const key = `${conn.sourceId}::${conn.targetId}`;
       if (!groupedByDirection.has(key)) {
         groupedByDirection.set(key, []);
@@ -215,18 +264,27 @@ function NetworkGraphInner({
       if (edgeDisplayMode === "grouped") {
         const relationships = sortedGroup.map((conn) => {
           const ct = getConnectionType(conn.type);
+          const isFilterMatch = connectionMatchesFilters(conn);
           return {
             id: conn.id,
             type: conn.type,
             label: ct?.label || conn.type,
             color: ct?.color || "#94a3b8",
+            isFilterMatch,
           };
         });
+        const hasFilterMatch = relationships.some(
+          (relationship) => relationship.isFilterMatch
+        );
         const hasDirectional = sortedGroup.some(
           (conn) => getConnectionType(conn.type)?.directional
         );
         const edgeColor =
-          relationships.length === 1 ? relationships[0].color : "#64748b";
+          hasFilterMatch
+            ? relationships.length === 1
+              ? relationships[0].color
+              : "#64748b"
+            : MUTED_EDGE_COLOR;
         const source = sortedGroup[0].sourceId;
         const target = sortedGroup[0].targetId;
         const sourceSystem = filteredSystemsById.get(source);
@@ -243,10 +301,16 @@ function NetworkGraphInner({
               ? relationships[0].label
               : `${relationships.length} relationships`,
           type: "default",
-          animated: sortedGroup.some(
-            (conn) => conn.type === "feeds_into" || conn.type === "depends_on"
-          ),
-          style: { stroke: edgeColor, strokeWidth: 2.2 },
+          animated:
+            hasFilterMatch &&
+            sortedGroup.some(
+              (conn) => conn.type === "feeds_into" || conn.type === "depends_on"
+            ),
+          style: {
+            stroke: edgeColor,
+            strokeWidth: hasFilterMatch ? 2.2 : 1.5,
+            opacity: hasFilterMatch ? 1 : 0.5,
+          },
           labelStyle: { fontSize: 10, fill: edgeColor },
           markerEnd: hasDirectional
             ? { type: "arrowclosed", color: edgeColor }
@@ -262,7 +326,10 @@ function NetworkGraphInner({
 
       sortedGroup.forEach((conn, index) => {
         const ct = getConnectionType(conn.type);
-        const edgeColor = ct?.color || "#94a3b8";
+        const isFilterMatch = connectionMatchesFilters(conn);
+        const edgeColor = isFilterMatch
+          ? ct?.color || "#94a3b8"
+          : MUTED_EDGE_COLOR;
         rawEdges.push({
           id: conn.id,
           source: conn.sourceId,
@@ -271,8 +338,14 @@ function NetworkGraphInner({
           targetHandle: `in-${conn.type}`,
           label: ct?.label || conn.type,
           type: "parallelRelationship",
-          animated: conn.type === "feeds_into" || conn.type === "depends_on",
-          style: { stroke: edgeColor, strokeWidth: 1.8 },
+          animated:
+            isFilterMatch &&
+            (conn.type === "feeds_into" || conn.type === "depends_on"),
+          style: {
+            stroke: edgeColor,
+            strokeWidth: isFilterMatch ? 1.8 : 1.35,
+            opacity: isFilterMatch ? 1 : 0.5,
+          },
           labelStyle: { fontSize: 10, fill: edgeColor },
           markerEnd: ct?.directional
             ? { type: "arrowclosed", color: edgeColor }
@@ -280,6 +353,7 @@ function NetworkGraphInner({
           data: {
             parallelIndex: index,
             parallelCount: sortedGroup.length,
+            isFilterMatch,
           },
         });
       });
@@ -292,6 +366,7 @@ function NetworkGraphInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     filteredSystems,
+    visibleConnections,
     filteredConnections,
     filteredSystemsById,
     domains,
@@ -299,6 +374,7 @@ function NetworkGraphInner({
     layoutKey,
     matchingSystemIds,
     edgeDisplayMode,
+    connectionMatchesFilters,
   ]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -339,6 +415,39 @@ function NetworkGraphInner({
     setRelationshipTarget(null);
   }, []);
 
+  const closeConnectionEditor = useCallback(() => {
+    setEditingConnectionId(null);
+    setEditingConnectionType("");
+    setEditingConnectionNote("");
+  }, []);
+
+  const openConnectionEditor = useCallback(
+    (connectionId) => {
+      const connection = allConnectionsById.get(connectionId);
+      if (!connection) return;
+      setSelectedNode(null);
+      setContextMenu(null);
+      setRelationshipSource(null);
+      setRelationshipTarget(null);
+      setGroupedEdgeDetails(null);
+      setEditingConnectionId(connection.id);
+      setEditingConnectionType(connection.type);
+      setEditingConnectionNote(connection.note || "");
+    },
+    [allConnectionsById]
+  );
+
+  const editingConnection = useMemo(
+    () => (editingConnectionId ? allConnectionsById.get(editingConnectionId) : null),
+    [editingConnectionId, allConnectionsById]
+  );
+  const editingSourceName = editingConnection
+    ? allSystemsById.get(editingConnection.sourceId)?.name || "Unknown"
+    : "";
+  const editingTargetName = editingConnection
+    ? allSystemsById.get(editingConnection.targetId)?.name || "Unknown"
+    : "";
+
   useEffect(() => {
     function handlePointerDown(event) {
       if (
@@ -372,6 +481,7 @@ function NetworkGraphInner({
         setSelectedNode(null);
         setRelationshipTarget(null);
         setGroupedEdgeDetails(null);
+        closeConnectionEditor();
         if (relationshipSource) {
           resetRelationshipFlow();
         }
@@ -389,6 +499,7 @@ function NetworkGraphInner({
     relationshipTarget,
     relationshipSource,
     groupedEdgeDetails,
+    closeConnectionEditor,
     resetRelationshipFlow,
   ]);
 
@@ -429,14 +540,18 @@ function NetworkGraphInner({
     setContextMenu(null);
     setRelationshipTarget(null);
     setGroupedEdgeDetails(null);
+    closeConnectionEditor();
     if (relationshipSource) {
       resetRelationshipFlow();
     }
-  }, [relationshipSource, resetRelationshipFlow]);
+  }, [relationshipSource, closeConnectionEditor, resetRelationshipFlow]);
 
   const onEdgeClick = useCallback(
     (event, edge) => {
-      if (edgeDisplayMode !== "grouped") return;
+      if (edgeDisplayMode !== "grouped") {
+        openConnectionEditor(edge.id);
+        return;
+      }
       const groupedRelationships = edge.data?.groupedRelationships;
       if (!groupedRelationships || groupedRelationships.length === 0) return;
       setSelectedNode(null);
@@ -450,7 +565,43 @@ function NetworkGraphInner({
         relationships: groupedRelationships,
       });
     },
-    [edgeDisplayMode]
+    [edgeDisplayMode, openConnectionEditor]
+  );
+
+  const handleSaveConnectionEdit = useCallback(
+    (event) => {
+      event.preventDefault();
+      if (!editingConnection) return;
+      if (!editingConnectionType) return;
+      const hasDuplicate = allConnections.some(
+        (connection) =>
+          connection.id !== editingConnection.id &&
+          ((connection.sourceId === editingConnection.sourceId &&
+            connection.targetId === editingConnection.targetId) ||
+            (connection.sourceId === editingConnection.targetId &&
+              connection.targetId === editingConnection.sourceId)) &&
+          connection.type === editingConnectionType
+      );
+      if (hasDuplicate) {
+        toast.error("This connection already exists");
+        return;
+      }
+      updateConnection(editingConnection.id, {
+        type: editingConnectionType,
+        note: editingConnectionNote.trim() || null,
+      });
+      toast.success("Relationship updated");
+      closeConnectionEditor();
+      setGroupedEdgeDetails(null);
+    },
+    [
+      allConnections,
+      closeConnectionEditor,
+      editingConnection,
+      editingConnectionNote,
+      editingConnectionType,
+      updateConnection,
+    ]
   );
 
   const handleContextMenuAction = useCallback((action) => {
@@ -648,20 +799,87 @@ function NetworkGraphInner({
           </div>
           <div className="space-y-1">
             {groupedEdgeDetails.relationships.map((relationship) => (
-              <div
+              <button
                 key={relationship.id}
-                className="flex items-center gap-2 rounded-sm px-2 py-1 text-sm"
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-sm hover:bg-accent"
+                onClick={() => openConnectionEditor(relationship.id)}
               >
                 <span
                   className="inline-block size-2 rounded-full"
-                  style={{ backgroundColor: relationship.color }}
+                  style={{
+                    backgroundColor: relationship.isFilterMatch
+                      ? relationship.color
+                      : MUTED_EDGE_COLOR,
+                  }}
                 />
-                <span>{relationship.label}</span>
-              </div>
+                <span
+                  className={
+                    relationship.isFilterMatch ? "text-foreground" : "text-muted-foreground"
+                  }
+                >
+                  {relationship.label}
+                </span>
+              </button>
             ))}
           </div>
         </div>
       )}
+
+      <Dialog
+        open={Boolean(editingConnectionId)}
+        onOpenChange={(open) => {
+          if (!open) closeConnectionEditor();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Relationship</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveConnectionEdit} className="grid gap-4">
+            <div className="text-xs text-muted-foreground">
+              {editingSourceName} &rarr; {editingTargetName}
+            </div>
+            <div className="grid gap-2">
+              <Label>Connection Type</Label>
+              <Select value={editingConnectionType} onValueChange={setEditingConnectionType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONNECTION_TYPES.map((connectionType) => (
+                    <SelectItem key={connectionType.value} value={connectionType.value}>
+                      <div className="flex flex-col">
+                        <span>{connectionType.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {connectionType.description}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-connection-note">Note</Label>
+              <Textarea
+                id="edit-connection-note"
+                value={editingConnectionNote}
+                onChange={(event) => setEditingConnectionNote(event.target.value)}
+                placeholder="Any context about this connection"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeConnectionEditor}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!editingConnectionType}>
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <SystemForm
         open={Boolean(editSystemTarget)}
