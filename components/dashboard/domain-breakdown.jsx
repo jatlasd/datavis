@@ -2,11 +2,10 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 
 export function DomainBreakdown() {
-  const domains = useMapStore((s) => s.domains);
-  const systems = useMapStore((s) => s.systems);
+  const { domains, systems } = useFilteredData();
 
   const breakdown = useMemo(() => {
     return domains

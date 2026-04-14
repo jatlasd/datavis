@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useMapStore } from "@/store/use-map-store";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableHeader,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowUpDown } from "lucide-react";
 
-export function SystemTable({ systems, domains }) {
+export function SystemTable({ systems, domains, activeProfileId, profileSystemIds, onToggleProfileSystem }) {
   const getConnectionCount = useMapStore((s) => s.getConnectionCount);
 
   const [sortKey, setSortKey] = useState("name");
@@ -81,6 +82,7 @@ export function SystemTable({ systems, domains }) {
     <Table>
       <TableHeader>
         <TableRow>
+          {onToggleProfileSystem && <TableHead className="w-10">In Profile</TableHead>}
           <SortableHead column="name">Name</SortableHead>
           <SortableHead column="vendor">Vendor</SortableHead>
           <SortableHead column="domains">Domains</SortableHead>
@@ -91,6 +93,14 @@ export function SystemTable({ systems, domains }) {
       <TableBody>
         {sorted.map((sys) => (
           <TableRow key={sys.id}>
+            {onToggleProfileSystem && (
+              <TableCell>
+                <Checkbox
+                  checked={profileSystemIds?.has(sys.id) ?? false}
+                  onCheckedChange={() => onToggleProfileSystem(sys.id)}
+                />
+              </TableCell>
+            )}
             <TableCell className="font-medium">
               <Link href={`/systems/${sys.id}`} className="hover:underline">
                 {sys.name}

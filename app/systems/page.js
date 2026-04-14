@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 import { SystemTable } from "@/components/systems/system-table";
 import { SystemForm } from "@/components/systems/system-form";
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Plus, Filter, X } from "lucide-react";
+import { Plus, Filter, X, FolderOpen } from "lucide-react";
 
 export default function SystemsPage() {
-  const systems = useMapStore((s) => s.systems);
-  const domains = useMapStore((s) => s.domains);
+  const allSystems = useMapStore((s) => s.systems);
+  const allDomains = useMapStore((s) => s.domains);
+  const toggleSystemInProfile = useMapStore((s) => s.toggleSystemInProfile);
+  const { systems, domains, activeProfile, activeProfileId } = useFilteredData();
   const [formOpen, setFormOpen] = useState(false);
   const [selectedDomainIds, setSelectedDomainIds] = useState([]);
 
@@ -41,17 +44,29 @@ export default function SystemsPage() {
 
   const domainMap = useMemo(() => {
     const m = {};
-    for (const d of domains) {
+    for (const d of allDomains) {
       m[d.id] = d;
     }
     return m;
-  }, [domains]);
+  }, [allDomains]);
+
+  const profileSystemIds = activeProfile
+    ? new Set(activeProfile.systemIds)
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Systems</h1>
-        {systems.length > 0 && (
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Systems</h1>
+          {activeProfile && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              <FolderOpen className="size-3" />
+              {activeProfile.name}
+            </span>
+          )}
+        </div>
+        {allSystems.length > 0 && (
           <Button onClick={() => setFormOpen(true)}>
             <Plus className="size-4" />
             Add System
@@ -124,7 +139,7 @@ export default function SystemsPage() {
         </div>
       )}
 
-      {systems.length === 0 ? (
+      {allSystems.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <p className="mb-1 text-lg font-medium">No systems yet</p>
           <p className="mb-6 text-sm text-muted-foreground">
@@ -135,8 +150,21 @@ export default function SystemsPage() {
             Add System
           </Button>
         </div>
+      ) : systems.length === 0 && activeProfile ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+          <p className="mb-1 text-lg font-medium">No systems in this profile</p>
+          <p className="mb-6 text-sm text-muted-foreground">
+            Edit the profile to add systems, or switch to &ldquo;All Systems&rdquo; to see everything.
+          </p>
+        </div>
       ) : (
-        <SystemTable systems={filteredSystems} domains={domains} />
+        <SystemTable
+          systems={filteredSystems}
+          domains={allDomains}
+          activeProfileId={activeProfileId}
+          profileSystemIds={profileSystemIds}
+          onToggleProfileSystem={activeProfileId ? (systemId) => toggleSystemInProfile(activeProfileId, systemId) : null}
+        />
       )}
 
       <SystemForm open={formOpen} onOpenChange={setFormOpen} />

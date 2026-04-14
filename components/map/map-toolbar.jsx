@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 import { CONNECTION_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +22,7 @@ export function MapToolbar({
   stats,
   hasFilters,
 }) {
-  const domains = useMapStore((s) => s.domains);
-  const systems = useMapStore((s) => s.systems);
-  const connections = useMapStore((s) => s.connections);
+  const { domains, systems, connections } = useFilteredData();
   const [filtersExpanded, setFiltersExpanded] = useState(true);
 
   const domainCounts = useMemo(() => {

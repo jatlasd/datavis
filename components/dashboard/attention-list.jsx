@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 import { AlertCircle } from "lucide-react";
 
 export function AttentionList() {
-  const systems = useMapStore((s) => s.systems);
-  const connections = useMapStore((s) => s.connections);
+  const { systems, connections } = useFilteredData();
 
   const untagged = systems.filter((s) => s.domainIds.length === 0);
   const isolated = systems.filter((s) => {

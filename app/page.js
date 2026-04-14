@@ -3,18 +3,19 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 import { generateSeedData } from "@/lib/seed-data";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { DomainBreakdown } from "@/components/dashboard/domain-breakdown";
 import { AttentionList } from "@/components/dashboard/attention-list";
 import { Button } from "@/components/ui/button";
-import { Server, Layers, Network, ArrowRight, Plus, Database } from "lucide-react";
+import { Server, Layers, Network, ArrowRight, Plus, Database, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 
 export default function DashboardPage() {
-  const systems = useMapStore((s) => s.systems);
-  const domains = useMapStore((s) => s.domains);
-  const connections = useMapStore((s) => s.connections);
+  const allSystems = useMapStore((s) => s.systems);
+  const allDomains = useMapStore((s) => s.domains);
+  const { systems, domains, connections, activeProfile } = useFilteredData();
 
   const topConnected = useMemo(() => {
     const counts = {};
@@ -32,7 +33,7 @@ export default function DashboardPage() {
       .filter(Boolean);
   }, [connections, systems]);
 
-  const isEmpty = systems.length === 0 && domains.length === 0;
+  const isEmpty = allSystems.length === 0 && allDomains.length === 0;
 
   function handleLoadSeed() {
     const data = generateSeedData();
@@ -81,7 +82,15 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          {activeProfile && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              <FolderOpen className="size-3" />
+              {activeProfile.name}
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
           <Button asChild size="sm" variant="outline">
             <Link href="/systems">

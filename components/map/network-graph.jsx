@@ -13,6 +13,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 import { getConnectionType } from "@/lib/constants";
 import { SystemNodePopover } from "@/components/map/system-popover";
 
@@ -63,9 +64,9 @@ function NetworkGraphInner({
   fitViewKey,
   onStatsChange,
 }) {
-  const systems = useMapStore((s) => s.systems);
-  const domains = useMapStore((s) => s.domains);
-  const connections = useMapStore((s) => s.connections);
+  const allSystems = useMapStore((s) => s.systems);
+  const allConnections = useMapStore((s) => s.connections);
+  const { systems, domains, connections } = useFilteredData();
   const { fitView, setCenter, getNodes } = useReactFlow();
 
   const [selectedNode, setSelectedNode] = useState(null);
@@ -96,11 +97,11 @@ function NetworkGraphInner({
   useEffect(() => {
     onStatsChange?.({
       filteredSystems: filteredSystems.length,
-      totalSystems: systems.length,
+      totalSystems: allSystems.length,
       filteredConnections: filteredConnections.length,
-      totalConnections: connections.length,
+      totalConnections: allConnections.length,
     });
-  }, [filteredSystems.length, systems.length, filteredConnections.length, connections.length, onStatsChange]);
+  }, [filteredSystems.length, allSystems.length, filteredConnections.length, allConnections.length, onStatsChange]);
 
   const normalizedQuery = searchQuery?.toLowerCase().trim() || "";
 
@@ -212,10 +213,18 @@ function NetworkGraphInner({
     setSelectedNode(null);
   }, []);
 
-  if (systems.length === 0) {
+  if (allSystems.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         Add some systems to see the map.
+      </div>
+    );
+  }
+
+  if (systems.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        No systems in this profile.
       </div>
     );
   }

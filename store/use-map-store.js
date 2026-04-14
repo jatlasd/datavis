@@ -8,6 +8,8 @@ export const useMapStore = create(
       domains: [],
       systems: [],
       connections: [],
+      profiles: [],
+      activeProfileId: null,
 
       addDomain: (data) => {
         const domain = {
@@ -79,6 +81,10 @@ export const useMapStore = create(
           connections: s.connections.filter(
             (c) => c.sourceId !== id && c.targetId !== id
           ),
+          profiles: s.profiles.map((p) => ({
+            ...p,
+            systemIds: p.systemIds.filter((sid) => sid !== id),
+          })),
         }));
       },
 
@@ -153,9 +159,100 @@ export const useMapStore = create(
       },
 
       clearAll: () => set({ domains: [], systems: [], connections: [] }),
+
+      createProfile: (data) => {
+        const profile = {
+          id: createId(),
+          name: data.name,
+          description: data.description || null,
+          systemIds: data.systemIds || [],
+          createdAt: Date.now(),
+        };
+        set((s) => ({ profiles: [...s.profiles, profile] }));
+        return profile;
+      },
+
+      updateProfile: (id, data) => {
+        set((s) => ({
+          profiles: s.profiles.map((p) =>
+            p.id === id ? { ...p, ...data } : p
+          ),
+        }));
+      },
+
+      deleteProfile: (id) => {
+        set((s) => ({
+          profiles: s.profiles.filter((p) => p.id !== id),
+          activeProfileId: s.activeProfileId === id ? null : s.activeProfileId,
+        }));
+      },
+
+      duplicateProfile: (id) => {
+        const source = get().profiles.find((p) => p.id === id);
+        if (!source) return null;
+        const profile = {
+          id: createId(),
+          name: `${source.name} (Copy)`,
+          description: source.description,
+          systemIds: [...source.systemIds],
+          createdAt: Date.now(),
+        };
+        set((s) => ({ profiles: [...s.profiles, profile] }));
+        return profile;
+      },
+
+      setActiveProfile: (id) => {
+        set({ activeProfileId: id });
+      },
+
+      addSystemToProfile: (profileId, systemId) => {
+        set((s) => ({
+          profiles: s.profiles.map((p) => {
+            if (p.id !== profileId) return p;
+            if (p.systemIds.includes(systemId)) return p;
+            return { ...p, systemIds: [...p.systemIds, systemId] };
+          }),
+        }));
+      },
+
+      removeSystemFromProfile: (profileId, systemId) => {
+        set((s) => ({
+          profiles: s.profiles.map((p) => {
+            if (p.id !== profileId) return p;
+            return { ...p, systemIds: p.systemIds.filter((id) => id !== systemId) };
+          }),
+        }));
+      },
+
+      toggleSystemInProfile: (profileId, systemId) => {
+        set((s) => ({
+          profiles: s.profiles.map((p) => {
+            if (p.id !== profileId) return p;
+            const has = p.systemIds.includes(systemId);
+            return {
+              ...p,
+              systemIds: has
+                ? p.systemIds.filter((id) => id !== systemId)
+                : [...p.systemIds, systemId],
+            };
+          }),
+        }));
+      },
     }),
     {
       name: "datapus-map-store",
+      version: 1,
+      migrate: (persisted, version) => {
+        if (version === 0) {
+          return {
+            ...persisted,
+            profiles: [],
+            activeProfileId: null,
+          };
+        }
+        return persisted;
+      },
     }
   )
 );
+

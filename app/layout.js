@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { Separator } from "@/components/ui/separator";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ActiveProfileBadge } from "@/components/active-profile-badge";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,6 +37,7 @@ export default function RootLayout({ children }) {
                 <SidebarTrigger />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <span>Datapus</span>
+                <ActiveProfileBadge />
               </header>
               <main>{children}</main>
             </SidebarInset>
