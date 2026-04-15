@@ -2,6 +2,7 @@
 
 import { Handle, Position } from "@xyflow/react";
 import { CONNECTION_TYPES } from "@/lib/constants";
+import { NODE_WIDTH } from "@/lib/network-graph-layout";
 
 const handleOffsets = CONNECTION_TYPES.map((connectionType, index) => ({
   type: connectionType.value,
@@ -23,7 +24,7 @@ export function TypedSystemNode({ data }) {
       className="relative rounded-md px-4 py-2 text-center text-sm font-medium text-white"
       style={{
         background: data.color,
-        minWidth: 180,
+        minWidth: NODE_WIDTH,
         opacity: data.dimmed ? 0.25 : 1,
         border: data.isMatch ? "2px solid #fff" : "none",
         boxShadow: data.isMatch ? `0 0 12px ${data.color}` : undefined,
