@@ -39,6 +39,9 @@ export function ProfileForm({ open, onOpenChange, editingProfile = null }) {
   const [search, setSearch] = useState("");
   const [selectedDomainIds, setSelectedDomainIds] = useState([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  const [selectedGlobalDomainIds, setSelectedGlobalDomainIds] = useState(
+    editingProfile?.globalDomainIds || []
+  );
 
   const isEditing = !!editingProfile;
 
@@ -49,6 +52,7 @@ export function ProfileForm({ open, onOpenChange, editingProfile = null }) {
     setSearch("");
     setSelectedDomainIds([]);
     setSelectedCategoryIds([]);
+    setSelectedGlobalDomainIds([]);
   }
 
   function handleOpenChange(val) {
@@ -80,6 +84,14 @@ export function ProfileForm({ open, onOpenChange, editingProfile = null }) {
     );
   }
 
+  function toggleGlobalDomain(domainId) {
+    setSelectedGlobalDomainIds((prev) =>
+      prev.includes(domainId)
+        ? prev.filter((id) => id !== domainId)
+        : [...prev, domainId]
+    );
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
     const trimmed = name.trim();
@@ -90,6 +102,7 @@ export function ProfileForm({ open, onOpenChange, editingProfile = null }) {
         name: trimmed,
         description: description.trim() || null,
         systemIds: selectedSystemIds,
+        globalDomainIds: selectedGlobalDomainIds,
       });
       toast.success(`Updated "${trimmed}"`);
     } else {
@@ -97,6 +110,7 @@ export function ProfileForm({ open, onOpenChange, editingProfile = null }) {
         name: trimmed,
         description: description.trim() || null,
         systemIds: selectedSystemIds,
+        globalDomainIds: selectedGlobalDomainIds,
       });
       toast.success(`Created "${trimmed}"`);
     }
@@ -195,6 +209,48 @@ export function ProfileForm({ open, onOpenChange, editingProfile = null }) {
               />
             </div>
 
+            {domains.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>Global Domains ({selectedGlobalDomainIds.length} selected)</Label>
+                  {selectedGlobalDomainIds.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedGlobalDomainIds([])}
+                    >
+                      Clear selected
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Choose which global domains this profile includes.
+                </p>
+                <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border p-2">
+                  {domains.map((domain) => {
+                    const checked = selectedGlobalDomainIds.includes(domain.id);
+                    return (
+                      <label
+                        key={domain.id}
+                        className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggleGlobalDomain(domain.id)}
+                        />
+                        <span
+                          className="inline-block size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: domain.color }}
+                        />
+                        <span className="truncate">{domain.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {systems.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -206,7 +262,7 @@ export function ProfileForm({ open, onOpenChange, editingProfile = null }) {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Systems, domains, and categories are shared across all profiles. Use filters to build this group from existing systems.
+                  Systems and categories are shared globally. Use filters to build this group from existing systems.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Input

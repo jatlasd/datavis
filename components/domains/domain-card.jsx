@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useMapStore } from "@/store/use-map-store";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export function DomainCard({ domain }) {
+  const isProfileDomain = Boolean(domain.profileId);
   const systemCount = useMapStore((s) =>
     s.systems.filter((sys) => sys.domainIds.includes(domain.id)).length
   );
@@ -13,7 +15,12 @@ export function DomainCard({ domain }) {
     <Link href={`/domains/${domain.id}`} className="block">
       <Card className="h-full transition-colors hover:bg-muted/50" style={{ borderLeft: `4px solid ${domain.color}` }}>
         <CardHeader>
-          <CardTitle>{domain.name}</CardTitle>
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle>{domain.name}</CardTitle>
+            <Badge variant={isProfileDomain ? "default" : "secondary"}>
+              {isProfileDomain ? "Profile" : "Global"}
+            </Badge>
+          </div>
           {domain.description && (
             <CardDescription className="line-clamp-2">
               {domain.description}

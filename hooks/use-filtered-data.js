@@ -4,6 +4,7 @@ import { useMapStore } from "@/store/use-map-store";
 export function useFilteredData() {
   const systems = useMapStore((s) => s.systems);
   const domains = useMapStore((s) => s.domains);
+  const profileDomains = useMapStore((s) => s.profileDomains);
   const categories = useMapStore((s) => s.categories);
   const connections = useMapStore((s) => s.connections);
   const profiles = useMapStore((s) => s.profiles);
@@ -18,6 +19,7 @@ export function useFilteredData() {
       return {
         systems,
         domains,
+        profileDomains,
         categories,
         connections,
         activeProfile: null,
@@ -27,23 +29,45 @@ export function useFilteredData() {
 
     const systemIdSet = new Set(activeProfile.systemIds);
     const filteredSystems = systems.filter((s) => systemIdSet.has(s.id));
-    const domainIdSet = new Set(filteredSystems.flatMap((s) => s.domainIds));
+    const selectedGlobalDomainIds = new Set(activeProfile.globalDomainIds || []);
+    const scopedGlobalDomains = domains.filter((domain) =>
+      selectedGlobalDomainIds.has(domain.id)
+    );
+    const scopedProfileDomains = profileDomains.filter(
+      (domain) => domain.profileId === activeProfile.id
+    );
+    const scopedDomains = [...scopedGlobalDomains, ...scopedProfileDomains];
+    const scopedDomainIds = new Set(scopedDomains.map((domain) => domain.id));
+    const scopedSystems = filteredSystems.map((system) => ({
+      ...system,
+      domainIds: (system.domainIds || []).filter((domainId) =>
+        scopedDomainIds.has(domainId)
+      ),
+    }));
     const categoryIdSet = new Set(
       filteredSystems.flatMap((s) => s.categoryIds || [])
     );
-    const filteredDomains = domains.filter((d) => domainIdSet.has(d.id));
     const filteredCategories = categories.filter((c) => categoryIdSet.has(c.id));
     const filteredConnections = connections.filter(
       (c) => systemIdSet.has(c.sourceId) && systemIdSet.has(c.targetId)
     );
 
     return {
-      systems: filteredSystems,
-      domains: filteredDomains,
+      systems: scopedSystems,
+      domains: scopedDomains,
+      profileDomains: scopedProfileDomains,
       categories: filteredCategories,
       connections: filteredConnections,
       activeProfile,
       activeProfileId,
     };
-  }, [systems, domains, categories, connections, profiles, activeProfileId]);
+  }, [
+    systems,
+    domains,
+    profileDomains,
+    categories,
+    connections,
+    profiles,
+    activeProfileId,
+  ]);
 }

@@ -30,6 +30,7 @@ import { toast } from "sonner";
 export default function ProfilesPage() {
   const profiles = useMapStore((s) => s.profiles);
   const systems = useMapStore((s) => s.systems);
+  const profileDomains = useMapStore((s) => s.profileDomains);
   const activeProfileId = useMapStore((s) => s.activeProfileId);
   const setActiveProfile = useMapStore((s) => s.setActiveProfile);
   const deleteProfile = useMapStore((s) => s.deleteProfile);
@@ -99,6 +100,10 @@ export default function ProfilesPage() {
             const systemCount = profile.systemIds.filter((sid) =>
               systems.some((s) => s.id === sid)
             ).length;
+            const globalDomainCount = (profile.globalDomainIds || []).length;
+            const localDomainCount = profileDomains.filter(
+              (domain) => domain.profileId === profile.id
+            ).length;
 
             return (
               <Card key={profile.id} className={isActive ? "ring-2 ring-primary" : ""}>
@@ -145,9 +150,14 @@ export default function ProfilesPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Server className="size-3.5" />
-                    {systemCount} {systemCount === 1 ? "system" : "systems"}
+                  <div className="space-y-1.5 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Server className="size-3.5" />
+                      {systemCount} {systemCount === 1 ? "system" : "systems"}
+                    </div>
+                    <div>
+                      Domains: {globalDomainCount} global, {localDomainCount} profile-local
+                    </div>
                   </div>
                 </CardContent>
                 <CardFooter className="gap-2">

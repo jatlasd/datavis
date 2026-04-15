@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useMapStore } from "@/store/use-map-store";
 import { useFilteredData } from "@/hooks/use-filtered-data";
 import { DEFAULT_DOMAINS } from "@/lib/constants";
@@ -13,10 +12,15 @@ import { Plus, FolderOpen } from "lucide-react";
 
 export default function DomainsPage() {
   const allDomains = useMapStore((s) => s.domains);
+  const profileDomains = useMapStore((s) => s.profileDomains);
   const seedDefaultDomains = useMapStore((s) => s.seedDefaultDomains);
   const { domains, activeProfile } = useFilteredData();
   const [formOpen, setFormOpen] = useState(false);
+  const [formScope, setFormScope] = useState("global");
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
+  const visibleGlobalDomains = domains.filter((domain) => !domain.profileId);
+  const visibleProfileDomains = domains.filter((domain) => domain.profileId);
+  const hasAnyVisibleDomains = domains.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
@@ -30,14 +34,31 @@ export default function DomainsPage() {
             </span>
           )}
         </div>
-        {allDomains.length > 0 && (
+        {(allDomains.length > 0 || (activeProfile && profileDomains.length > 0)) && (
           <div className="flex items-center gap-2">
             {activeProfile && (
               <Button variant="outline" onClick={() => setProfilePickerOpen(true)}>
                 Select Existing Systems
               </Button>
             )}
-            <Button onClick={() => setFormOpen(true)}>
+            {activeProfile && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFormScope("profile");
+                  setFormOpen(true);
+                }}
+              >
+                <Plus className="size-4" />
+                Create Profile Domain
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                setFormScope("global");
+                setFormOpen(true);
+              }}
+            >
               <Plus className="size-4" />
               {activeProfile ? "Create Global Domain" : "Add Domain"}
             </Button>
@@ -45,14 +66,19 @@ export default function DomainsPage() {
         )}
       </div>
 
-      {allDomains.length === 0 ? (
+      {!activeProfile && allDomains.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <p className="mb-1 text-lg font-medium">No domains yet</p>
           <p className="mb-6 text-sm text-muted-foreground">
             Domains group your systems into functional areas.
           </p>
           <div className="flex gap-3">
-            <Button onClick={() => setFormOpen(true)}>
+            <Button
+              onClick={() => {
+                setFormScope("global");
+                setFormOpen(true);
+              }}
+            >
               <Plus className="size-4" />
               Add Domain
             </Button>
@@ -61,20 +87,66 @@ export default function DomainsPage() {
             </Button>
           </div>
         </div>
-      ) : domains.length === 0 && activeProfile ? (
+      ) : activeProfile && !hasAnyVisibleDomains ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <p className="mb-1 text-lg font-medium">No domains in this profile</p>
           <p className="mb-6 text-sm text-muted-foreground">
-            Domains are shared globally. Add systems to this profile to see linked domains here, or edit a system to assign existing domains.
+            Select global domains for this profile or create profile-local domains.
           </p>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => setProfilePickerOpen(true)}>
-              Select Existing Systems
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFormScope("profile");
+                setFormOpen(true);
+              }}
+            >
+              Create Profile Domain
             </Button>
-            <Button asChild>
-              <Link href="/systems">Go to Systems</Link>
+            <Button
+              onClick={() => {
+                setFormScope("global");
+                setFormOpen(true);
+              }}
+            >
+              Create Global Domain
             </Button>
           </div>
+        </div>
+      ) : activeProfile ? (
+        <div className="space-y-8">
+          <section>
+            <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+              Profile Domains
+            </h2>
+            {visibleProfileDomains.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No profile-local domains yet.
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleProfileDomains.map((d) => (
+                  <DomainCard key={d.id} domain={d} />
+                ))}
+              </div>
+            )}
+          </section>
+          <section>
+            <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+              Global Domains In Profile
+            </h2>
+            {visibleGlobalDomains.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No global domains selected for this profile.
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleGlobalDomains.map((d) => (
+                  <DomainCard key={d.id} domain={d} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -88,6 +160,8 @@ export default function DomainsPage() {
         key={`new-${formOpen ? "open" : "closed"}`}
         open={formOpen}
         onOpenChange={setFormOpen}
+        scope={formScope}
+        profileId={activeProfile?.id || null}
       />
       <ProfileSystemsPickerDialog
         key={`${activeProfile?.id || "no-profile"}-${profilePickerOpen ? "open" : "closed"}`}

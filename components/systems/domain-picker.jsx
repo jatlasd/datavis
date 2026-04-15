@@ -1,6 +1,7 @@
 "use client";
 
 import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -11,7 +12,7 @@ import {
 import { Plus } from "lucide-react";
 
 export function DomainPicker({ systemId }) {
-  const domains = useMapStore((s) => s.domains);
+  const { domains } = useFilteredData();
   const system = useMapStore((s) => s.systems.find((sys) => sys.id === systemId));
   const toggleSystemDomain = useMapStore((s) => s.toggleSystemDomain);
 

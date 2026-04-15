@@ -18,7 +18,6 @@ import { Plus, Filter, X, FolderOpen } from "lucide-react";
 
 export default function SystemsPage() {
   const allSystems = useMapStore((s) => s.systems);
-  const allDomains = useMapStore((s) => s.domains);
   const allCategories = useMapStore((s) => s.categories);
   const toggleSystemInProfile = useMapStore((s) => s.toggleSystemInProfile);
   const {
@@ -70,11 +69,11 @@ export default function SystemsPage() {
 
   const domainMap = useMemo(() => {
     const m = {};
-    for (const d of allDomains) {
+    for (const d of domains) {
       m[d.id] = d;
     }
     return m;
-  }, [allDomains]);
+  }, [domains]);
 
   const categoryMap = useMemo(() => {
     const m = {};
@@ -254,7 +253,7 @@ export default function SystemsPage() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <p className="mb-1 text-lg font-medium">No systems in this profile</p>
           <p className="mb-6 text-sm text-muted-foreground">
-            Systems, domains, and categories are shared globally. Select existing systems for this profile, or switch to &ldquo;All Systems&rdquo; to browse the full catalog.
+            Systems and categories are shared globally. Domains can be selected globally for this profile or created as profile-local.
           </p>
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={() => setProfilePickerOpen(true)}>
@@ -269,7 +268,7 @@ export default function SystemsPage() {
       ) : (
         <SystemTable
           systems={filteredSystems}
-          domains={allDomains}
+          domains={domains}
           categories={allCategories}
           profileSystemIds={profileSystemIds}
           onToggleProfileSystem={activeProfileId ? (systemId) => toggleSystemInProfile(activeProfileId, systemId) : null}

@@ -17,21 +17,43 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
-export function DomainForm({ open, onOpenChange, domain }) {
+export function DomainForm({ open, onOpenChange, domain, profileId = null, scope = "global" }) {
   const addDomain = useMapStore((s) => s.addDomain);
   const updateDomain = useMapStore((s) => s.updateDomain);
+  const addProfileDomain = useMapStore((s) => s.addProfileDomain);
+  const updateProfileDomain = useMapStore((s) => s.updateProfileDomain);
 
   const [name, setName] = useState(domain?.name ?? "");
   const [description, setDescription] = useState(domain?.description ?? "");
   const [color, setColor] = useState(domain?.color ?? DOMAIN_COLORS[0].value);
 
+  const isProfileDomain = domain ? Boolean(domain.profileId) : scope === "profile";
+
   function handleSubmit(e) {
     e.preventDefault();
     if (!name.trim()) return;
 
-    if (domain) {
-      updateDomain(domain.id, { name: name.trim(), description: description.trim() || null, color });
+    if (domain && isProfileDomain) {
+      updateProfileDomain(domain.id, {
+        name: name.trim(),
+        description: description.trim() || null,
+        color,
+      });
       toast.success(`"${name.trim()}" updated`);
+    } else if (domain) {
+      updateDomain(domain.id, {
+        name: name.trim(),
+        description: description.trim() || null,
+        color,
+      });
+      toast.success(`"${name.trim()}" updated`);
+    } else if (isProfileDomain && profileId) {
+      addProfileDomain(profileId, {
+        name: name.trim(),
+        description: description.trim() || null,
+        color,
+      });
+      toast.success(`"${name.trim()}" created`);
     } else {
       addDomain({ name: name.trim(), description: description.trim() || null, color });
       toast.success(`"${name.trim()}" created`);
@@ -43,7 +65,15 @@ export function DomainForm({ open, onOpenChange, domain }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{domain ? "Edit Domain" : "New Domain"}</DialogTitle>
+          <DialogTitle>
+            {domain
+              ? isProfileDomain
+                ? "Edit Profile Domain"
+                : "Edit Global Domain"
+              : isProfileDomain
+                ? "New Profile Domain"
+                : "New Global Domain"}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">

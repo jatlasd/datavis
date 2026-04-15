@@ -6,6 +6,7 @@ export const useMapStore = create(
   persist(
     (set, get) => ({
       domains: [],
+      profileDomains: [],
       categories: [],
       systems: [],
       connections: [],
@@ -36,6 +37,10 @@ export const useMapStore = create(
       deleteDomain: (id) => {
         set((s) => ({
           domains: s.domains.filter((d) => d.id !== id),
+          profiles: s.profiles.map((profile) => ({
+            ...profile,
+            globalDomainIds: (profile.globalDomainIds || []).filter((did) => did !== id),
+          })),
           systems: s.systems.map((sys) => ({
             ...sys,
             domainIds: sys.domainIds.filter((did) => did !== id),
@@ -260,7 +265,16 @@ export const useMapStore = create(
         set({ categories });
       },
 
-      clearAll: () => set({ domains: [], categories: [], systems: [], connections: [] }),
+      clearAll: () =>
+        set({
+          domains: [],
+          profileDomains: [],
+          categories: [],
+          systems: [],
+          connections: [],
+          profiles: [],
+          activeProfileId: null,
+        }),
 
       createProfile: (data) => {
         const profile = {
@@ -268,6 +282,7 @@ export const useMapStore = create(
           name: data.name,
           description: data.description || null,
           systemIds: data.systemIds || [],
+          globalDomainIds: data.globalDomainIds || [],
           createdAt: Date.now(),
         };
         set((s) => ({ profiles: [...s.profiles, profile] }));
@@ -284,6 +299,13 @@ export const useMapStore = create(
 
       deleteProfile: (id) => {
         set((s) => ({
+          systems: s.systems.map((sys) => ({
+            ...sys,
+            domainIds: sys.domainIds.filter(
+              (did) => !s.profileDomains.some((domain) => domain.profileId === id && domain.id === did)
+            ),
+          })),
+          profileDomains: s.profileDomains.filter((domain) => domain.profileId !== id),
           profiles: s.profiles.filter((p) => p.id !== id),
           activeProfileId: s.activeProfileId === id ? null : s.activeProfileId,
         }));
@@ -292,14 +314,46 @@ export const useMapStore = create(
       duplicateProfile: (id) => {
         const source = get().profiles.find((p) => p.id === id);
         if (!source) return null;
+        const profileId = createId();
         const profile = {
-          id: createId(),
+          id: profileId,
           name: `${source.name} (Copy)`,
           description: source.description,
           systemIds: [...source.systemIds],
+          globalDomainIds: [...(source.globalDomainIds || [])],
           createdAt: Date.now(),
         };
-        set((s) => ({ profiles: [...s.profiles, profile] }));
+        set((s) => {
+          const sourceProfileDomains = s.profileDomains.filter(
+            (domain) => domain.profileId === source.id
+          );
+          const duplicatedProfileDomains = sourceProfileDomains.map((domain) => ({
+            ...domain,
+            id: createId(),
+            profileId,
+            createdAt: Date.now(),
+          }));
+          const profileDomainIdMap = sourceProfileDomains.reduce((acc, domain, index) => {
+            acc[domain.id] = duplicatedProfileDomains[index]?.id;
+            return acc;
+          }, {});
+
+          return {
+            profiles: [...s.profiles, profile],
+            profileDomains: [...s.profileDomains, ...duplicatedProfileDomains],
+            systems: s.systems.map((sys) => {
+              if (!source.systemIds.includes(sys.id)) return sys;
+              const duplicatedIds = sys.domainIds
+                .map((did) => profileDomainIdMap[did])
+                .filter(Boolean);
+              if (duplicatedIds.length === 0) return sys;
+              return {
+                ...sys,
+                domainIds: Array.from(new Set([...sys.domainIds, ...duplicatedIds])),
+              };
+            }),
+          };
+        });
         return profile;
       },
 
@@ -340,10 +394,57 @@ export const useMapStore = create(
           }),
         }));
       },
+
+      addProfileDomain: (profileId, data) => {
+        const profileDomain = {
+          id: createId(),
+          profileId,
+          name: data.name,
+          color: data.color,
+          description: data.description || null,
+          createdAt: Date.now(),
+        };
+        set((s) => ({ profileDomains: [...s.profileDomains, profileDomain] }));
+        return profileDomain;
+      },
+
+      updateProfileDomain: (id, data) => {
+        set((s) => ({
+          profileDomains: s.profileDomains.map((domain) =>
+            domain.id === id ? { ...domain, ...data } : domain
+          ),
+        }));
+      },
+
+      deleteProfileDomain: (id) => {
+        set((s) => ({
+          profileDomains: s.profileDomains.filter((domain) => domain.id !== id),
+          systems: s.systems.map((sys) => ({
+            ...sys,
+            domainIds: sys.domainIds.filter((did) => did !== id),
+          })),
+        }));
+      },
+
+      toggleProfileGlobalDomain: (profileId, domainId) => {
+        set((s) => ({
+          profiles: s.profiles.map((profile) => {
+            if (profile.id !== profileId) return profile;
+            const globalDomainIds = profile.globalDomainIds || [];
+            const has = globalDomainIds.includes(domainId);
+            return {
+              ...profile,
+              globalDomainIds: has
+                ? globalDomainIds.filter((id) => id !== domainId)
+                : [...globalDomainIds, domainId],
+            };
+          }),
+        }));
+      },
     }),
     {
       name: "datapus-map-store",
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         let next = persisted || {};
         if (version === 0) {
@@ -363,6 +464,27 @@ export const useMapStore = create(
                   ...sys,
                   domainIds: Array.isArray(sys.domainIds) ? sys.domainIds : [],
                   categoryIds: Array.isArray(sys.categoryIds) ? sys.categoryIds : [],
+                }))
+              : [],
+          };
+        }
+
+        if (version < 3) {
+          next = {
+            ...next,
+            profileDomains: Array.isArray(next.profileDomains) ? next.profileDomains : [],
+            profiles: Array.isArray(next.profiles)
+              ? next.profiles.map((profile) => ({
+                  ...profile,
+                  globalDomainIds: Array.isArray(profile.globalDomainIds)
+                    ? profile.globalDomainIds
+                    : [],
+                }))
+              : [],
+            systems: Array.isArray(next.systems)
+              ? next.systems.map((sys) => ({
+                  ...sys,
+                  domainIds: Array.isArray(sys.domainIds) ? sys.domainIds : [],
                 }))
               : [],
           };

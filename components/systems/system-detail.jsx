@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMapStore } from "@/store/use-map-store";
+import { useFilteredData } from "@/hooks/use-filtered-data";
 import { SystemForm } from "@/components/systems/system-form";
 import { DomainPicker } from "@/components/systems/domain-picker";
 import { CategoryPicker } from "@/components/systems/category-picker";
@@ -27,7 +28,7 @@ import { toast } from "sonner";
 export function SystemDetail({ systemId }) {
   const router = useRouter();
   const systems = useMapStore((s) => s.systems);
-  const domains = useMapStore((s) => s.domains);
+  const { domains } = useFilteredData();
   const categories = useMapStore((s) => s.categories);
   const connections = useMapStore((s) => s.connections);
   const deleteSystem = useMapStore((s) => s.deleteSystem);

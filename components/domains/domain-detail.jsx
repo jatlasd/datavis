@@ -33,11 +33,17 @@ export function DomainDetail({ domainId }) {
   const router = useRouter();
   const allSystems = useMapStore((s) => s.systems);
   const allDomains = useMapStore((s) => s.domains);
+  const profileDomains = useMapStore((s) => s.profileDomains);
   const deleteDomain = useMapStore((s) => s.deleteDomain);
+  const deleteProfileDomain = useMapStore((s) => s.deleteProfileDomain);
 
+  const combinedDomains = useMemo(
+    () => [...allDomains, ...profileDomains],
+    [allDomains, profileDomains]
+  );
   const domain = useMemo(
-    () => allDomains.find((entry) => entry.id === domainId),
-    [allDomains, domainId]
+    () => combinedDomains.find((entry) => entry.id === domainId),
+    [combinedDomains, domainId]
   );
   const systems = useMemo(
     () => allSystems.filter((sys) => sys.domainIds.includes(domainId)),
@@ -45,6 +51,7 @@ export function DomainDetail({ domainId }) {
   );
 
   const [editOpen, setEditOpen] = useState(false);
+  const isProfileDomain = Boolean(domain?.profileId);
 
   if (!domain) {
     return (
@@ -63,7 +70,7 @@ export function DomainDetail({ domainId }) {
   }
   const crossDomainEntries = Object.entries(crossDomainMap)
     .map(([did, count]) => {
-      const d = allDomains.find((dom) => dom.id === did);
+      const d = combinedDomains.find((dom) => dom.id === did);
       return d ? { domain: d, count } : null;
     })
     .filter(Boolean)
@@ -71,7 +78,11 @@ export function DomainDetail({ domainId }) {
 
   function handleDelete() {
     const name = domain.name;
-    deleteDomain(domainId);
+    if (isProfileDomain) {
+      deleteProfileDomain(domainId);
+    } else {
+      deleteDomain(domainId);
+    }
     toast.success(`"${name}" deleted`);
     router.push("/domains");
   }
@@ -85,6 +96,9 @@ export function DomainDetail({ domainId }) {
             style={{ backgroundColor: domain.color }}
           />
           <h1 className="text-2xl font-semibold tracking-tight">{domain.name}</h1>
+          <Badge variant={isProfileDomain ? "default" : "secondary"}>
+            {isProfileDomain ? "Profile Domain" : "Global Domain"}
+          </Badge>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
@@ -102,7 +116,7 @@ export function DomainDetail({ domainId }) {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete &ldquo;{domain.name}&rdquo;?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will remove the domain and unlink all its systems. This action cannot be undone.
+                  This will remove the domain and unlink all its systems.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -149,7 +163,7 @@ export function DomainDetail({ domainId }) {
                       {sys.domainIds
                         .filter((did) => did !== domainId)
                         .map((did) => {
-                          const d = allDomains.find((dom) => dom.id === did);
+                          const d = combinedDomains.find((dom) => dom.id === did);
                           if (!d) return null;
                           return (
                             <Badge
@@ -195,6 +209,8 @@ export function DomainDetail({ domainId }) {
         open={editOpen}
         onOpenChange={setEditOpen}
         domain={domain}
+        scope={isProfileDomain ? "profile" : "global"}
+        profileId={domain.profileId || null}
       />
     </div>
   );
