@@ -7,15 +7,18 @@ import { useFilteredData } from "@/hooks/use-filtered-data";
 import { generateSeedData } from "@/lib/seed-data";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { DomainBreakdown } from "@/components/dashboard/domain-breakdown";
+import { CategoryBreakdown } from "@/components/dashboard/category-breakdown";
 import { AttentionList } from "@/components/dashboard/attention-list";
+import { buildOverlapCandidates } from "@/lib/overlap-candidates";
 import { Button } from "@/components/ui/button";
-import { Server, Layers, Network, ArrowRight, Plus, Database, FolderOpen } from "lucide-react";
+import { Server, Layers, Tags, Network, ArrowRight, Plus, Database, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 
 export default function DashboardPage() {
   const allSystems = useMapStore((s) => s.systems);
   const allDomains = useMapStore((s) => s.domains);
-  const { systems, domains, connections, activeProfile } = useFilteredData();
+  const allCategories = useMapStore((s) => s.categories);
+  const { systems, domains, categories, connections, activeProfile } = useFilteredData();
 
   const topConnected = useMemo(() => {
     const counts = {};
@@ -33,16 +36,34 @@ export default function DashboardPage() {
       .filter(Boolean);
   }, [connections, systems]);
 
-  const isEmpty = allSystems.length === 0 && allDomains.length === 0;
+  const overlapCandidates = useMemo(
+    () =>
+      buildOverlapCandidates({
+        systems,
+        domains,
+        categories,
+        connections,
+      }),
+    [systems, domains, categories, connections]
+  );
+
+  const isEmpty =
+    allSystems.length === 0 && allDomains.length === 0 && allCategories.length === 0;
+  const missingDomainCount = systems.filter((system) => system.domainIds.length === 0).length;
+  const missingCategoryCount = systems.filter((system) => (system.categoryIds || []).length === 0).length;
+  const multiDomainCount = systems.filter((system) => system.domainIds.length > 1).length;
+  const highOverlapCount = overlapCandidates.filter((candidate) => candidate.strength === "High").length;
+  const duplicateCount = connections.filter((connection) => connection.type === "duplicates").length;
 
   function handleLoadSeed() {
     const data = generateSeedData();
     useMapStore.setState({
       domains: data.domains,
+      categories: data.categories,
       systems: data.systems,
       connections: data.connections,
     });
-    toast.success("Loaded demo data — 15 systems, 10 domains, 13 connections");
+    toast.success("Loaded demo data — 15 systems, 10 domains, 8 categories, 13 connections");
   }
 
   if (isEmpty) {
@@ -68,6 +89,12 @@ export default function DashboardPage() {
             <Link href="/systems">
               <Server className="size-4" />
               Add Systems
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/categories">
+              <Tags className="size-4" />
+              Create Categories
             </Link>
           </Button>
           <Button variant="outline" onClick={handleLoadSeed}>
@@ -109,13 +136,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard label="Systems" value={systems.length} icon={Server} />
         <StatCard label="Domains" value={domains.length} icon={Layers} />
+        <StatCard label="Categories" value={categories.length} icon={Tags} />
         <StatCard label="Connections" value={connections.length} icon={Network} />
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard label="Missing Domains" value={missingDomainCount} icon={Layers} />
+        <StatCard label="Missing Categories" value={missingCategoryCount} icon={Tags} />
+        <StatCard label="Multi-domain Tools" value={multiDomainCount} icon={Server} />
+        <StatCard label="High Overlap Candidates" value={highOverlapCount} icon={Network} />
+        <StatCard label="Confirmed Duplicates" value={duplicateCount} icon={Network} />
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-3">
         <section>
           <h2 className="mb-4 text-lg font-medium">Systems by Domain</h2>
           {domains.length > 0 ? (
@@ -123,6 +159,17 @@ export default function DashboardPage() {
           ) : (
             <p className="text-sm text-muted-foreground">
               Create domains to see the breakdown.
+            </p>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-lg font-medium">Systems by Category</h2>
+          {categories.length > 0 ? (
+            <CategoryBreakdown />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Create categories to see the breakdown.
             </p>
           )}
         </section>
@@ -152,6 +199,7 @@ export default function DashboardPage() {
             <h2 className="mb-4 text-lg font-medium">Needs Attention</h2>
             <AttentionList />
             {systems.every((s) => s.domainIds.length > 0) &&
+              systems.every((s) => (s.categoryIds || []).length > 0) &&
               connections.length > 0 &&
               systems.every((s) =>
                 connections.some(
@@ -159,7 +207,7 @@ export default function DashboardPage() {
                 )
               ) && (
                 <p className="text-sm text-muted-foreground">
-                  All systems have domains and connections assigned.
+                  All systems have domains, categories, and connections assigned.
                 </p>
               )}
           </section>

@@ -15,7 +15,13 @@ import {
 } from "@/components/ui/table";
 import { ArrowUpDown } from "lucide-react";
 
-export function SystemTable({ systems, domains, activeProfileId, profileSystemIds, onToggleProfileSystem }) {
+export function SystemTable({
+  systems,
+  domains,
+  categories,
+  profileSystemIds,
+  onToggleProfileSystem,
+}) {
   const getConnectionCount = useMapStore((s) => s.getConnectionCount);
 
   const [sortKey, setSortKey] = useState("name");
@@ -38,6 +44,14 @@ export function SystemTable({ systems, domains, activeProfileId, profileSystemId
     return m;
   }, [domains]);
 
+  const categoryMap = useMemo(() => {
+    const m = {};
+    for (const c of categories) {
+      m[c.id] = c;
+    }
+    return m;
+  }, [categories]);
+
   const sorted = useMemo(() => {
     const copy = [...systems];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -50,6 +64,8 @@ export function SystemTable({ systems, domains, activeProfileId, profileSystemId
           return dir * (a.vendor || "").localeCompare(b.vendor || "");
         case "domains":
           return dir * (a.domainIds.length - b.domainIds.length);
+        case "categories":
+          return dir * ((a.categoryIds || []).length - (b.categoryIds || []).length);
         case "connections":
           return dir * (getConnectionCount(a.id) - getConnectionCount(b.id));
         case "createdAt":
@@ -64,30 +80,47 @@ export function SystemTable({ systems, domains, activeProfileId, profileSystemId
 
   if (systems.length === 0) return null;
 
-  function SortableHead({ column, children }) {
-    return (
-      <TableHead
-        className="cursor-pointer select-none"
-        onClick={() => handleSort(column)}
-      >
-        <span className="inline-flex items-center gap-1">
-          {children}
-          <ArrowUpDown className="size-3 text-muted-foreground" />
-        </span>
-      </TableHead>
-    );
-  }
-
   return (
     <Table>
       <TableHeader>
         <TableRow>
           {onToggleProfileSystem && <TableHead className="w-10">In Profile</TableHead>}
-          <SortableHead column="name">Name</SortableHead>
-          <SortableHead column="vendor">Vendor</SortableHead>
-          <SortableHead column="domains">Domains</SortableHead>
-          <SortableHead column="connections">Connections</SortableHead>
-          <SortableHead column="createdAt">Date Added</SortableHead>
+          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("name")}>
+            <span className="inline-flex items-center gap-1">
+              Name
+              <ArrowUpDown className="size-3 text-muted-foreground" />
+            </span>
+          </TableHead>
+          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("vendor")}>
+            <span className="inline-flex items-center gap-1">
+              Vendor
+              <ArrowUpDown className="size-3 text-muted-foreground" />
+            </span>
+          </TableHead>
+          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("domains")}>
+            <span className="inline-flex items-center gap-1">
+              Domains
+              <ArrowUpDown className="size-3 text-muted-foreground" />
+            </span>
+          </TableHead>
+          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("categories")}>
+            <span className="inline-flex items-center gap-1">
+              Categories
+              <ArrowUpDown className="size-3 text-muted-foreground" />
+            </span>
+          </TableHead>
+          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("connections")}>
+            <span className="inline-flex items-center gap-1">
+              Connections
+              <ArrowUpDown className="size-3 text-muted-foreground" />
+            </span>
+          </TableHead>
+          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("createdAt")}>
+            <span className="inline-flex items-center gap-1">
+              Date Added
+              <ArrowUpDown className="size-3 text-muted-foreground" />
+            </span>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -119,6 +152,23 @@ export function SystemTable({ systems, domains, activeProfileId, profileSystemId
                       style={{ backgroundColor: d.color }}
                     >
                       {d.name}
+                    </Badge>
+                  );
+                })}
+              </div>
+            </TableCell>
+            <TableCell>
+              <div className="flex flex-wrap gap-1">
+                {(sys.categoryIds || []).map((cid) => {
+                  const c = categoryMap[cid];
+                  if (!c) return null;
+                  return (
+                    <Badge
+                      key={c.id}
+                      className="text-white"
+                      style={{ backgroundColor: c.color }}
+                    >
+                      {c.name}
                     </Badge>
                   );
                 })}

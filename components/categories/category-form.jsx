@@ -1,40 +1,49 @@
 "use client";
 
 import { useState } from "react";
-import { useMapStore } from "@/store/use-map-store";
-import { DOMAIN_COLORS } from "@/lib/constants";
-import { toast } from "sonner";
 import { Check } from "lucide-react";
+import { toast } from "sonner";
+import { useMapStore } from "@/store/use-map-store";
+import { CATEGORY_COLORS } from "@/lib/constants";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
-export function DomainForm({ open, onOpenChange, domain }) {
-  const addDomain = useMapStore((s) => s.addDomain);
-  const updateDomain = useMapStore((s) => s.updateDomain);
+export function CategoryForm({ open, onOpenChange, category }) {
+  const addCategory = useMapStore((s) => s.addCategory);
+  const updateCategory = useMapStore((s) => s.updateCategory);
 
-  const [name, setName] = useState(domain?.name ?? "");
-  const [description, setDescription] = useState(domain?.description ?? "");
-  const [color, setColor] = useState(domain?.color ?? DOMAIN_COLORS[0].value);
+  const [name, setName] = useState(category?.name ?? "");
+  const [description, setDescription] = useState(category?.description ?? "");
+  const [color, setColor] = useState(category?.color ?? CATEGORY_COLORS[0].value);
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!name.trim()) return;
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
 
-    if (domain) {
-      updateDomain(domain.id, { name: name.trim(), description: description.trim() || null, color });
-      toast.success(`"${name.trim()}" updated`);
+    if (category) {
+      updateCategory(category.id, {
+        name: trimmedName,
+        description: description.trim() || null,
+        color,
+      });
+      toast.success(`"${trimmedName}" updated`);
     } else {
-      addDomain({ name: name.trim(), description: description.trim() || null, color });
-      toast.success(`"${name.trim()}" created`);
+      addCategory({
+        name: trimmedName,
+        description: description.trim() || null,
+        color,
+      });
+      toast.success(`"${trimmedName}" created`);
     }
     onOpenChange(false);
   }
@@ -43,33 +52,33 @@ export function DomainForm({ open, onOpenChange, domain }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{domain ? "Edit Domain" : "New Domain"}</DialogTitle>
+          <DialogTitle>{category ? "Edit Category" : "New Category"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="domain-name">Name</Label>
+            <Label htmlFor="category-name">Name</Label>
             <Input
-              id="domain-name"
+              id="category-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Student Information"
+              placeholder="e.g. Assessment"
               autoFocus
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="domain-description">Description</Label>
+            <Label htmlFor="category-description">Description</Label>
             <Textarea
-              id="domain-description"
+              id="category-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this domain cover?"
+              placeholder="What capability does this category represent?"
               rows={3}
             />
           </div>
           <div className="grid gap-2">
             <Label>Color</Label>
             <div className="flex flex-wrap gap-2">
-              {DOMAIN_COLORS.map((c) => (
+              {CATEGORY_COLORS.map((c) => (
                 <button
                   key={c.value}
                   type="button"
@@ -92,7 +101,7 @@ export function DomainForm({ open, onOpenChange, domain }) {
           </div>
           <DialogFooter>
             <Button type="submit" disabled={!name.trim()}>
-              {domain ? "Save Changes" : "Create Domain"}
+              {category ? "Save Changes" : "Create Category"}
             </Button>
           </DialogFooter>
         </form>

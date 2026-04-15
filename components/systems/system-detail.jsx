@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMapStore } from "@/store/use-map-store";
 import { SystemForm } from "@/components/systems/system-form";
 import { DomainPicker } from "@/components/systems/domain-picker";
+import { CategoryPicker } from "@/components/systems/category-picker";
 import { ConnectionForm } from "@/components/systems/connection-form";
 import { ConnectionList } from "@/components/systems/connection-list";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function SystemDetail({ systemId }) {
   const router = useRouter();
   const systems = useMapStore((s) => s.systems);
   const domains = useMapStore((s) => s.domains);
+  const categories = useMapStore((s) => s.categories);
   const connections = useMapStore((s) => s.connections);
   const deleteSystem = useMapStore((s) => s.deleteSystem);
 
@@ -47,6 +49,9 @@ export function SystemDetail({ systemId }) {
   }
 
   const assignedDomains = domains.filter((d) => system.domainIds.includes(d.id));
+  const assignedCategories = categories.filter((c) =>
+    (system.categoryIds || []).includes(c.id)
+  );
   const connectionCount = connections.filter(
     (c) => c.sourceId === systemId || c.targetId === systemId
   ).length;
@@ -134,6 +139,28 @@ export function SystemDetail({ systemId }) {
         )}
       </section>
 
+      <section className="mb-8">
+        <div className="mb-3 flex items-center gap-3">
+          <h2 className="text-lg font-medium">Categories</h2>
+          <CategoryPicker systemId={systemId} />
+        </div>
+        {assignedCategories.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {assignedCategories.map((category) => (
+              <Badge
+                key={category.id}
+                className="text-white"
+                style={{ backgroundColor: category.color }}
+              >
+                {category.name}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No categories assigned yet.</p>
+        )}
+      </section>
+
       <section>
         <div className="mb-3 flex items-center gap-3">
           <h2 className="text-lg font-medium">
@@ -151,7 +178,12 @@ export function SystemDetail({ systemId }) {
         <ConnectionList systemId={systemId} />
       </section>
 
-      <SystemForm open={editOpen} onOpenChange={setEditOpen} system={system} />
+      <SystemForm
+        key={`${system.id}-${editOpen ? "open" : "closed"}`}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        system={system}
+      />
       <ConnectionForm
         open={connectionFormOpen}
         onOpenChange={setConnectionFormOpen}

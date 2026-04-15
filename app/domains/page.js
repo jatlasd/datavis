@@ -66,7 +66,11 @@ export default function DomainsPage() {
         </div>
       )}
 
-      <DomainForm open={formOpen} onOpenChange={setFormOpen} />
+      <DomainForm
+        key={`new-${formOpen ? "open" : "closed"}`}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+      />
     </div>
   );
 }

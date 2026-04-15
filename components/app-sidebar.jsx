@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Server, Layers, Network, FolderOpen, ChevronsUpDown, Check, Globe } from "lucide-react";
+import { LayoutDashboard, Server, Layers, Tags, Network, FolderOpen, ChevronsUpDown, Check, Globe, GitCompareArrows } from "lucide-react";
 import { useMapStore } from "@/store/use-map-store";
 import {
   Sidebar,
@@ -28,6 +28,8 @@ const navItems = [
   { title: "Profiles", href: "/profiles", icon: FolderOpen },
   { title: "Systems", href: "/systems", icon: Server },
   { title: "Domains", href: "/domains", icon: Layers },
+  { title: "Categories", href: "/categories", icon: Tags },
+  { title: "Overlaps", href: "/overlaps", icon: GitCompareArrows },
   { title: "Map", href: "/map", icon: Network },
 ];
 

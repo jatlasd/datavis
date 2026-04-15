@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMapStore } from "@/store/use-map-store";
 import { toast } from "sonner";
 import {
@@ -14,24 +14,26 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function SystemForm({ open, onOpenChange, system }) {
   const addSystem = useMapStore((s) => s.addSystem);
   const updateSystem = useMapStore((s) => s.updateSystem);
+  const categories = useMapStore((s) => s.categories);
 
-  const [name, setName] = useState("");
-  const [vendor, setVendor] = useState("");
-  const [url, setUrl] = useState("");
-  const [description, setDescription] = useState("");
+  const [name, setName] = useState(system?.name ?? "");
+  const [vendor, setVendor] = useState(system?.vendor ?? "");
+  const [url, setUrl] = useState(system?.url ?? "");
+  const [description, setDescription] = useState(system?.description ?? "");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState(system?.categoryIds ?? []);
 
-  useEffect(() => {
-    if (open) {
-      setName(system?.name ?? "");
-      setVendor(system?.vendor ?? "");
-      setUrl(system?.url ?? "");
-      setDescription(system?.description ?? "");
-    }
-  }, [open, system]);
+  function toggleCategory(categoryId) {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  }
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -43,6 +45,7 @@ export function SystemForm({ open, onOpenChange, system }) {
         vendor: vendor.trim() || null,
         url: url.trim() || null,
         description: description.trim() || null,
+        categoryIds: selectedCategoryIds,
       });
       toast.success(`"${name.trim()}" updated`);
     } else {
@@ -52,6 +55,7 @@ export function SystemForm({ open, onOpenChange, system }) {
         url: url.trim() || null,
         description: description.trim() || null,
         domainIds: [],
+        categoryIds: selectedCategoryIds,
       });
       toast.success(`"${name.trim()}" created`);
     }
@@ -103,6 +107,32 @@ export function SystemForm({ open, onOpenChange, system }) {
               rows={3}
             />
           </div>
+          {categories.length > 0 && (
+            <div className="grid gap-2">
+              <Label>Categories ({selectedCategoryIds.length} selected)</Label>
+              <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border p-2">
+                {categories.map((category) => {
+                  const checked = selectedCategoryIds.includes(category.id);
+                  return (
+                    <label
+                      key={category.id}
+                      className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleCategory(category.id)}
+                      />
+                      <span
+                        className="inline-block size-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: category.color }}
+                      />
+                      <span className="truncate">{category.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={!name.trim()}>
               {system ? "Save Changes" : "Create System"}

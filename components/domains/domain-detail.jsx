@@ -190,7 +190,12 @@ export function DomainDetail({ domainId }) {
         </section>
       )}
 
-      <DomainForm open={editOpen} onOpenChange={setEditOpen} domain={domain} />
+      <DomainForm
+        key={`${domain.id}-${editOpen ? "open" : "closed"}`}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        domain={domain}
+      />
     </div>
   );
 }

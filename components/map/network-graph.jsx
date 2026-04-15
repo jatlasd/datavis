@@ -542,6 +542,7 @@ function NetworkGraphInner({
       />
 
       <SystemForm
+        key={`${editSystemTarget?.id || "new"}-${Boolean(editSystemTarget) ? "open" : "closed"}`}
         open={Boolean(editSystemTarget)}
         onOpenChange={(open) => {
           if (!open) setEditSystemTarget(null);
