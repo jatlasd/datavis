@@ -88,7 +88,7 @@ export default function CategoriesPage() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <p className="mb-1 text-lg font-medium">No categories in this profile</p>
           <p className="mb-6 text-sm text-muted-foreground">
-            Add systems to this profile to see their categories here.
+            Categories are shared globally. Add systems to this profile to see linked categories here, or edit a system to assign existing categories.
           </p>
         </div>
       ) : (

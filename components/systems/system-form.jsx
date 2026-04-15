@@ -20,6 +20,7 @@ export function SystemForm({ open, onOpenChange, system }) {
   const addSystem = useMapStore((s) => s.addSystem);
   const updateSystem = useMapStore((s) => s.updateSystem);
   const categories = useMapStore((s) => s.categories);
+  const activeProfileId = useMapStore((s) => s.activeProfileId);
 
   const [name, setName] = useState(system?.name ?? "");
   const [vendor, setVendor] = useState(system?.vendor ?? "");
@@ -110,6 +111,11 @@ export function SystemForm({ open, onOpenChange, system }) {
           {categories.length > 0 && (
             <div className="grid gap-2">
               <Label>Categories ({selectedCategoryIds.length} selected)</Label>
+              {activeProfileId && (
+                <p className="text-xs text-muted-foreground">
+                  Categories are shared globally and can be reused across profiles.
+                </p>
+              )}
               <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border p-2">
                 {categories.map((category) => {
                   const checked = selectedCategoryIds.includes(category.id);

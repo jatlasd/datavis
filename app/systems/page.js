@@ -5,6 +5,7 @@ import { useMapStore } from "@/store/use-map-store";
 import { useFilteredData } from "@/hooks/use-filtered-data";
 import { SystemTable } from "@/components/systems/system-table";
 import { SystemForm } from "@/components/systems/system-form";
+import { ProfileSystemsPickerDialog } from "@/components/profiles/profile-systems-picker-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,6 +29,7 @@ export default function SystemsPage() {
     activeProfileId,
   } = useFilteredData();
   const [formOpen, setFormOpen] = useState(false);
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const [selectedDomainIds, setSelectedDomainIds] = useState([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
 
@@ -99,10 +101,17 @@ export default function SystemsPage() {
           )}
         </div>
         {allSystems.length > 0 && (
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus className="size-4" />
-            Add System
-          </Button>
+          <div className="flex items-center gap-2">
+            {activeProfile && (
+              <Button variant="outline" onClick={() => setProfilePickerOpen(true)}>
+                Select Existing Systems
+              </Button>
+            )}
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus className="size-4" />
+              {activeProfile ? "Create New System" : "Add System"}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -245,8 +254,17 @@ export default function SystemsPage() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <p className="mb-1 text-lg font-medium">No systems in this profile</p>
           <p className="mb-6 text-sm text-muted-foreground">
-            Edit the profile to add systems, or switch to &ldquo;All Systems&rdquo; to see everything.
+            Systems, domains, and categories are shared globally. Select existing systems for this profile, or switch to &ldquo;All Systems&rdquo; to browse the full catalog.
           </p>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={() => setProfilePickerOpen(true)}>
+              Select Existing Systems
+            </Button>
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus className="size-4" />
+              Create New System
+            </Button>
+          </div>
         </div>
       ) : (
         <SystemTable
@@ -262,6 +280,12 @@ export default function SystemsPage() {
         key={`new-${formOpen ? "open" : "closed"}`}
         open={formOpen}
         onOpenChange={setFormOpen}
+      />
+      <ProfileSystemsPickerDialog
+        key={`${activeProfile?.id || "no-profile"}-${profilePickerOpen ? "open" : "closed"}`}
+        open={profilePickerOpen}
+        onOpenChange={setProfilePickerOpen}
+        profile={activeProfile}
       />
     </div>
   );

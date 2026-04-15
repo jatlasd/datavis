@@ -107,7 +107,19 @@ export const useMapStore = create(
           categoryIds: data.categoryIds || [],
           createdAt: Date.now(),
         };
-        set((s) => ({ systems: [...s.systems, system] }));
+        set((s) => {
+          if (!s.activeProfileId) {
+            return { systems: [...s.systems, system] };
+          }
+          return {
+            systems: [...s.systems, system],
+            profiles: s.profiles.map((profile) => {
+              if (profile.id !== s.activeProfileId) return profile;
+              if (profile.systemIds.includes(system.id)) return profile;
+              return { ...profile, systemIds: [...profile.systemIds, system.id] };
+            }),
+          };
+        });
         return system;
       },
 
