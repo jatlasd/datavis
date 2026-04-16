@@ -21,6 +21,10 @@ export function MapToolbar({
   onFitView,
   edgeDisplayMode,
   onEdgeDisplayModeChange,
+  hiddenNodeCount,
+  onShowAllHiddenNodes,
+  hasIsolateMode,
+  onClearIsolateMode,
   stats,
   hasFilters,
 }) {
@@ -165,6 +169,26 @@ export function MapToolbar({
             onRelayout={onRelayout}
             onFitView={onFitView}
           />
+          {hiddenNodeCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onShowAllHiddenNodes}
+            >
+              Show Hidden ({hiddenNodeCount})
+            </Button>
+          )}
+          {hasIsolateMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onClearIsolateMode}
+            >
+              Clear Isolate
+            </Button>
+          )}
         </div>
       </div>
 

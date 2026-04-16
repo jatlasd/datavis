@@ -47,6 +47,14 @@ function NetworkGraphInner({
   edgeDisplayMode,
   layoutKey,
   fitViewKey,
+  hiddenNodeIds,
+  onHiddenNodeIdsChange,
+  pinnedNodeIds,
+  onPinnedNodeIdsChange,
+  selectedNodeIds,
+  onSelectedNodeIdsChange,
+  isolatedNodeId,
+  onIsolatedNodeIdChange,
   onStatsChange,
 }) {
   const allSystems = useMapStore((s) => s.systems);
@@ -76,6 +84,7 @@ function NetworkGraphInner({
   const contextMenuRef = useRef(null);
   const relationshipTypeMenuRef = useRef(null);
   const groupedEdgeDetailsRef = useRef(null);
+  const nodeMouseDownPosRef = useRef(null);
   const edgeTypes = useMemo(
     () => ({
       parallelRelationship: ParallelRelationshipEdge,
@@ -89,12 +98,47 @@ function NetworkGraphInner({
     []
   );
 
-  const filteredSystems = useMemo(() => {
+  const hiddenNodeIdSet = useMemo(() => new Set(hiddenNodeIds), [hiddenNodeIds]);
+  const pinnedNodeIdSet = useMemo(() => new Set(pinnedNodeIds), [pinnedNodeIds]);
+  const selectedNodeIdSet = useMemo(
+    () => new Set(selectedNodeIds),
+    [selectedNodeIds]
+  );
+
+  const domainFilteredSystems = useMemo(() => {
     if (domainFilter.length === 0) return systems;
     return systems.filter((s) =>
       s.domainIds.some((did) => domainFilter.includes(did))
     );
   }, [systems, domainFilter]);
+
+  const visibleBaseSystems = useMemo(
+    () => domainFilteredSystems.filter((system) => !hiddenNodeIdSet.has(system.id)),
+    [domainFilteredSystems, hiddenNodeIdSet]
+  );
+  const visibleBaseSystemIds = useMemo(
+    () => new Set(visibleBaseSystems.map((system) => system.id)),
+    [visibleBaseSystems]
+  );
+  const isolateNodeIds = useMemo(() => {
+    if (!isolatedNodeId || !visibleBaseSystemIds.has(isolatedNodeId)) return null;
+    const ids = new Set([isolatedNodeId]);
+    for (const connection of connections) {
+      if (
+        !visibleBaseSystemIds.has(connection.sourceId) ||
+        !visibleBaseSystemIds.has(connection.targetId)
+      ) {
+        continue;
+      }
+      if (connection.sourceId === isolatedNodeId) ids.add(connection.targetId);
+      if (connection.targetId === isolatedNodeId) ids.add(connection.sourceId);
+    }
+    return ids;
+  }, [connections, isolatedNodeId, visibleBaseSystemIds]);
+  const filteredSystems = useMemo(() => {
+    if (!isolateNodeIds) return visibleBaseSystems;
+    return visibleBaseSystems.filter((system) => isolateNodeIds.has(system.id));
+  }, [isolateNodeIds, visibleBaseSystems]);
 
   const filteredSystemIds = useMemo(
     () => new Set(filteredSystems.map((s) => s.id)),
@@ -112,6 +156,44 @@ function NetworkGraphInner({
     () => new Map(allSystems.map((system) => [system.id, system])),
     [allSystems]
   );
+  const allSystemIdSet = useMemo(
+    () => new Set(allSystems.map((system) => system.id)),
+    [allSystems]
+  );
+
+  useEffect(() => {
+    const nextHidden = hiddenNodeIds.filter((id) => allSystemIdSet.has(id));
+    if (nextHidden.length !== hiddenNodeIds.length) {
+      onHiddenNodeIdsChange?.(nextHidden);
+    }
+    const nextPinned = pinnedNodeIds.filter((id) => allSystemIdSet.has(id));
+    if (nextPinned.length !== pinnedNodeIds.length) {
+      onPinnedNodeIdsChange?.(nextPinned);
+    }
+    const nextSelected = selectedNodeIds.filter((id) => allSystemIdSet.has(id));
+    if (nextSelected.length !== selectedNodeIds.length) {
+      onSelectedNodeIdsChange?.(nextSelected);
+    }
+    if (isolatedNodeId && !allSystemIdSet.has(isolatedNodeId)) {
+      onIsolatedNodeIdChange?.(null);
+    }
+  }, [
+    allSystemIdSet,
+    hiddenNodeIds,
+    isolatedNodeId,
+    onHiddenNodeIdsChange,
+    onIsolatedNodeIdChange,
+    onPinnedNodeIdsChange,
+    onSelectedNodeIdsChange,
+    pinnedNodeIds,
+    selectedNodeIds,
+  ]);
+
+  useEffect(() => {
+    if (isolatedNodeId && hiddenNodeIdSet.has(isolatedNodeId)) {
+      onIsolatedNodeIdChange?.(null);
+    }
+  }, [hiddenNodeIdSet, isolatedNodeId, onIsolatedNodeIdChange]);
 
   const visibleConnections = useMemo(() => {
     return connections.filter((c) => {
@@ -182,6 +264,62 @@ function NetworkGraphInner({
     setNodes(initialNodes);
     setEdges(initialEdges);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  useEffect(() => {
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        const isPinned = pinnedNodeIdSet.has(node.id);
+        const draggable = !isPinned;
+        if (node.data?.isPinned === isPinned && node.draggable === draggable) {
+          return node;
+        }
+        return {
+          ...node,
+          draggable,
+          data: {
+            ...node.data,
+            isPinned,
+          },
+        };
+      })
+    );
+  }, [pinnedNodeIdSet, setNodes]);
+
+  useEffect(() => {
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        const isSelected = selectedNodeIdSet.has(node.id);
+        if (node.data?.isSelected === isSelected) {
+          return node;
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isSelected,
+          },
+        };
+      })
+    );
+  }, [selectedNodeIdSet, setNodes]);
+
+  useEffect(() => {
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        const isIsolatedRoot = isolatedNodeId === node.id;
+        if (node.data?.isIsolatedRoot === isIsolatedRoot) {
+          return node;
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isIsolatedRoot,
+          },
+        };
+      })
+    );
+  }, [isolatedNodeId, setNodes]);
 
   const fitViewKeyRef = useRef(fitViewKey);
   useEffect(() => {
@@ -277,6 +415,7 @@ function NetworkGraphInner({
       if (event.key === "Escape") {
         setContextMenu(null);
         setSelectedNode(null);
+        onSelectedNodeIdsChange?.([]);
         setRelationshipTarget(null);
         setGroupedEdgeDetails(null);
         closeConnectionEditor();
@@ -296,14 +435,23 @@ function NetworkGraphInner({
     contextMenu,
     relationshipTarget,
     relationshipSource,
+    onSelectedNodeIdsChange,
     groupedEdgeDetails,
     closeConnectionEditor,
     resetRelationshipFlow,
   ]);
 
   const onNodeClick = useCallback((event, node) => {
+    const down = nodeMouseDownPosRef.current;
+    nodeMouseDownPosRef.current = null;
+    if (down) {
+      const dx = event.clientX - down.x;
+      const dy = event.clientY - down.y;
+      if (dx * dx + dy * dy > 25) return;
+    }
     setContextMenu(null);
     setGroupedEdgeDetails(null);
+    const isMultiSelect = event.shiftKey || event.metaKey || event.ctrlKey;
     if (relationshipSource) {
       if (node.id === relationshipSource.id) {
         toast.error("Select a different node to create this relationship");
@@ -311,14 +459,30 @@ function NetworkGraphInner({
       }
 
       setSelectedNode(null);
+      onSelectedNodeIdsChange?.([]);
       setRelationshipTarget(node.data.system);
       setRelationshipTypeMenuPos({ x: event.clientX, y: event.clientY });
       return;
     }
 
+    if (isMultiSelect) {
+      setSelectedNode(null);
+      onSelectedNodeIdsChange?.((prev) =>
+        prev.includes(node.id)
+          ? prev.filter((id) => id !== node.id)
+          : [...prev, node.id]
+      );
+      return;
+    }
+
     setSelectedNode(node.data.system);
+    onSelectedNodeIdsChange?.([node.id]);
     setPopoverPos({ x: event.clientX, y: event.clientY });
-  }, [relationshipSource]);
+  }, [onSelectedNodeIdsChange, relationshipSource]);
+
+  const onWrapperMouseDown = useCallback((event) => {
+    nodeMouseDownPosRef.current = { x: event.clientX, y: event.clientY };
+  }, []);
 
   const onNodeContextMenu = useCallback((event, node) => {
     event.preventDefault();
@@ -330,11 +494,25 @@ function NetworkGraphInner({
       x: event.clientX,
       y: event.clientY,
       system: node.data.system,
+      isHidden: hiddenNodeIdSet.has(node.id),
+      isPinned: pinnedNodeIdSet.has(node.id),
+      isIsolated: isolatedNodeId === node.id,
+      isSelected: selectedNodeIdSet.has(node.id),
+      selectedCount: selectedNodeIds.length,
+      hiddenCount: hiddenNodeIds.length,
     });
-  }, []);
+  }, [
+    hiddenNodeIdSet,
+    hiddenNodeIds.length,
+    isolatedNodeId,
+    pinnedNodeIdSet,
+    selectedNodeIdSet,
+    selectedNodeIds.length,
+  ]);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
+    onSelectedNodeIdsChange?.([]);
     setContextMenu(null);
     setRelationshipTarget(null);
     setGroupedEdgeDetails(null);
@@ -342,7 +520,12 @@ function NetworkGraphInner({
     if (relationshipSource) {
       resetRelationshipFlow();
     }
-  }, [relationshipSource, closeConnectionEditor, resetRelationshipFlow]);
+  }, [
+    closeConnectionEditor,
+    onSelectedNodeIdsChange,
+    relationshipSource,
+    resetRelationshipFlow,
+  ]);
 
   const onEdgeClick = useCallback(
     (event, edge) => {
@@ -404,12 +587,18 @@ function NetworkGraphInner({
 
   const handleContextMenuAction = useCallback((action) => {
     if (!contextMenu?.system) return;
+    const targetId = contextMenu.system.id;
+    const selectedTargetIds =
+      selectedNodeIdSet.has(targetId) && selectedNodeIds.length > 1
+        ? selectedNodeIds
+        : [targetId];
 
     if (action === "create-relationship") {
       setRelationshipSource(contextMenu.system);
       setRelationshipTarget(null);
       setContextMenu(null);
       setSelectedNode(null);
+      onSelectedNodeIdsChange?.([]);
       return;
     }
 
@@ -419,11 +608,101 @@ function NetworkGraphInner({
       return;
     }
 
+    if (action === "hide-node") {
+      onHiddenNodeIdsChange?.((prev) => [
+        ...prev,
+        ...selectedTargetIds.filter((id) => !prev.includes(id)),
+      ]);
+      onSelectedNodeIdsChange?.((prev) =>
+        prev.filter((id) => !selectedTargetIds.includes(id))
+      );
+      if (selectedTargetIds.includes(isolatedNodeId)) {
+        onIsolatedNodeIdChange?.(null);
+      }
+      setSelectedNode(null);
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "unhide-node") {
+      onHiddenNodeIdsChange?.((prev) => prev.filter((id) => id !== targetId));
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "show-all-hidden") {
+      onHiddenNodeIdsChange?.([]);
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "pin-node") {
+      onPinnedNodeIdsChange?.((prev) => [
+        ...prev,
+        ...selectedTargetIds.filter((id) => !prev.includes(id)),
+      ]);
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "unpin-node") {
+      onPinnedNodeIdsChange?.((prev) => prev.filter((id) => id !== targetId));
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "isolate-node") {
+      onHiddenNodeIdsChange?.((prev) => prev.filter((id) => id !== targetId));
+      onIsolatedNodeIdChange?.(targetId);
+      onSelectedNodeIdsChange?.([targetId]);
+      setSelectedNode(contextMenu.system);
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "clear-isolate") {
+      onIsolatedNodeIdChange?.(null);
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "select-node") {
+      onSelectedNodeIdsChange?.((prev) =>
+        prev.includes(targetId) ? prev : [...prev, targetId]
+      );
+      setSelectedNode(contextMenu.system);
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "deselect-node") {
+      onSelectedNodeIdsChange?.((prev) => prev.filter((id) => id !== targetId));
+      setSelectedNode((prev) => (prev?.id === targetId ? null : prev));
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === "clear-selection") {
+      onSelectedNodeIdsChange?.([]);
+      setSelectedNode(null);
+      setContextMenu(null);
+      return;
+    }
+
     if (action === "delete-node") {
       setDeleteSystemTarget(contextMenu.system);
       setContextMenu(null);
     }
-  }, [contextMenu]);
+  }, [
+    contextMenu,
+    isolatedNodeId,
+    onHiddenNodeIdsChange,
+    onIsolatedNodeIdChange,
+    onPinnedNodeIdsChange,
+    onSelectedNodeIdsChange,
+    selectedNodeIdSet,
+    selectedNodeIds,
+  ]);
 
   const handleRelationshipTypeSelect = useCallback((type) => {
     if (!relationshipSource || !relationshipTarget) return;
@@ -449,11 +728,48 @@ function NetworkGraphInner({
     deleteSystem(deleteSystemTarget.id);
     setDeleteSystemTarget(null);
     setSelectedNode(null);
+    onHiddenNodeIdsChange?.((prev) =>
+      prev.filter((id) => id !== deleteSystemTarget.id)
+    );
+    onPinnedNodeIdsChange?.((prev) =>
+      prev.filter((id) => id !== deleteSystemTarget.id)
+    );
+    onSelectedNodeIdsChange?.((prev) =>
+      prev.filter((id) => id !== deleteSystemTarget.id)
+    );
+    if (isolatedNodeId === deleteSystemTarget.id) {
+      onIsolatedNodeIdChange?.(null);
+    }
     if (relationshipSource?.id === deleteSystemTarget.id || relationshipTarget?.id === deleteSystemTarget.id) {
       resetRelationshipFlow();
     }
     toast.success(`"${name}" deleted`);
-  }, [deleteSystem, deleteSystemTarget, relationshipSource, relationshipTarget, resetRelationshipFlow]);
+  }, [
+    deleteSystem,
+    deleteSystemTarget,
+    isolatedNodeId,
+    onHiddenNodeIdsChange,
+    onIsolatedNodeIdChange,
+    onPinnedNodeIdsChange,
+    onSelectedNodeIdsChange,
+    relationshipSource,
+    relationshipTarget,
+    resetRelationshipFlow,
+  ]);
+
+  const handleSelectionChange = useCallback(
+    ({ nodes: selectedFlowNodes = [] }) => {
+      const ids = selectedFlowNodes.map((node) => node.id);
+      onSelectedNodeIdsChange?.(ids);
+      if (ids.length !== 1) {
+        setSelectedNode(null);
+        return;
+      }
+      const selectedSystem = filteredSystemsById.get(ids[0]);
+      setSelectedNode(selectedSystem || null);
+    },
+    [filteredSystemsById, onSelectedNodeIdsChange]
+  );
 
   if (allSystems.length === 0) {
     return (
@@ -472,7 +788,7 @@ function NetworkGraphInner({
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full" onMouseDown={onWrapperMouseDown}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -484,6 +800,7 @@ function NetworkGraphInner({
         onEdgeClick={onEdgeClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
+        onSelectionChange={handleSelectionChange}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         nodesDraggable

@@ -10,6 +10,10 @@ export default function MapPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [layoutDirection, setLayoutDirection] = useState("LR");
   const [edgeDisplayMode, setEdgeDisplayMode] = useState("separate");
+  const [hiddenNodeIds, setHiddenNodeIds] = useState([]);
+  const [pinnedNodeIds, setPinnedNodeIds] = useState([]);
+  const [selectedNodeIds, setSelectedNodeIds] = useState([]);
+  const [isolatedNodeId, setIsolatedNodeId] = useState(null);
   const [layoutKey, setLayoutKey] = useState(0);
   const [fitViewKey, setFitViewKey] = useState(0);
   const [stats, setStats] = useState({
@@ -48,6 +52,10 @@ export default function MapPage() {
         onFitView={handleFitView}
         edgeDisplayMode={edgeDisplayMode}
         onEdgeDisplayModeChange={setEdgeDisplayMode}
+        hiddenNodeCount={hiddenNodeIds.length}
+        onShowAllHiddenNodes={() => setHiddenNodeIds([])}
+        hasIsolateMode={Boolean(isolatedNodeId)}
+        onClearIsolateMode={() => setIsolatedNodeId(null)}
         stats={stats}
         hasFilters={hasFilters}
       />
@@ -60,6 +68,14 @@ export default function MapPage() {
           edgeDisplayMode={edgeDisplayMode}
           layoutKey={layoutKey}
           fitViewKey={fitViewKey}
+          hiddenNodeIds={hiddenNodeIds}
+          onHiddenNodeIdsChange={setHiddenNodeIds}
+          pinnedNodeIds={pinnedNodeIds}
+          onPinnedNodeIdsChange={setPinnedNodeIds}
+          selectedNodeIds={selectedNodeIds}
+          onSelectedNodeIdsChange={setSelectedNodeIds}
+          isolatedNodeId={isolatedNodeId}
+          onIsolatedNodeIdChange={setIsolatedNodeId}
           onStatsChange={setStats}
         />
       </div>

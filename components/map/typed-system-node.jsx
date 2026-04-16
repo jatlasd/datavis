@@ -26,11 +26,27 @@ export function TypedSystemNode({ data }) {
         background: data.color,
         minWidth: NODE_WIDTH,
         opacity: data.dimmed ? 0.25 : 1,
-        border: data.isMatch ? "2px solid #fff" : "none",
-        boxShadow: data.isMatch ? `0 0 12px ${data.color}` : undefined,
+        border:
+          data.isSelected || data.isIsolatedRoot || data.isMatch
+            ? "2px solid #fff"
+            : "none",
+        boxShadow: data.isSelected
+          ? "0 0 0 3px rgba(255, 255, 255, 0.45)"
+          : data.isIsolatedRoot
+            ? "0 0 0 3px rgba(255, 255, 255, 0.35)"
+            : data.isMatch
+              ? `0 0 12px ${data.color}`
+              : undefined,
       }}
     >
-      {data.label}
+      <div className="inline-flex items-center gap-1.5">
+        <span>{data.label}</span>
+        {data.isPinned && (
+          <span className="rounded bg-black/20 px-1 py-0.5 text-[10px] leading-none">
+            PIN
+          </span>
+        )}
+      </div>
       <Handle
         id="in-generic"
         type="target"

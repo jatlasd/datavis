@@ -32,12 +32,16 @@ export function useNetworkGraphElements({
       return {
         id: sys.id,
         type: "typedSystem",
+        draggable: true,
         data: {
           label: sys.name,
           system: sys,
           color,
           isMatch,
           dimmed,
+          isPinned: false,
+          isSelected: false,
+          isIsolatedRoot: false,
           layoutDirection,
           layoutKey,
         },
