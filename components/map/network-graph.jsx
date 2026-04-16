@@ -87,6 +87,8 @@ function NetworkGraphInner({
   const nodeMouseDownPosRef = useRef(null);
   const didNodeDragRef = useRef(false);
   const ignoreNodeClickUntilRef = useRef(0);
+  const nodePositionsRef = useRef(new Map());
+  const layoutSignatureRef = useRef(`${layoutDirection}:${layoutKey}`);
   const edgeTypes = useMemo(
     () => ({
       parallelRelationship: ParallelRelationshipEdge,
@@ -263,9 +265,52 @@ function NetworkGraphInner({
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   useEffect(() => {
-    setNodes(initialNodes);
+    const nextSignature = `${layoutDirection}:${layoutKey}`;
+    const shouldPreservePositions = layoutSignatureRef.current === nextSignature;
+    layoutSignatureRef.current = nextSignature;
+
+    setNodes((prevNodes) => {
+      const prevNodesById = new Map(prevNodes.map((node) => [node.id, node]));
+      return initialNodes.map((node) => {
+        const prevNode = prevNodesById.get(node.id);
+        const cachedPosition = nodePositionsRef.current.get(node.id);
+        const preservedPosition = shouldPreservePositions
+          ? prevNode?.position || cachedPosition
+          : null;
+        if (!preservedPosition) return node;
+        return {
+          ...node,
+          position: { ...preservedPosition },
+        };
+      });
+    });
     setEdges(initialEdges);
-  }, [initialNodes, initialEdges, setNodes, setEdges]);
+  }, [
+    initialNodes,
+    initialEdges,
+    layoutDirection,
+    layoutKey,
+    setNodes,
+    setEdges,
+  ]);
+
+  useEffect(() => {
+    const nextPositions = new Map(nodePositionsRef.current);
+    for (const node of nodes) {
+      nextPositions.set(node.id, { ...node.position });
+    }
+    nodePositionsRef.current = nextPositions;
+  }, [nodes]);
+
+  useEffect(() => {
+    const nextPositions = new Map();
+    for (const [id, position] of nodePositionsRef.current.entries()) {
+      if (allSystemIdSet.has(id)) {
+        nextPositions.set(id, position);
+      }
+    }
+    nodePositionsRef.current = nextPositions;
+  }, [allSystemIdSet]);
 
   useEffect(() => {
     setNodes((prevNodes) =>
