@@ -122,6 +122,13 @@ export function NetworkGraphContextMenu({
       <button
         type="button"
         className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+        onClick={() => onAction("view-details")}
+      >
+        View Details
+      </button>
+      <button
+        type="button"
+        className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
         onClick={() => onAction("rename-node")}
       >
         Rename Node

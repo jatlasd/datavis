@@ -85,6 +85,8 @@ function NetworkGraphInner({
   const relationshipTypeMenuRef = useRef(null);
   const groupedEdgeDetailsRef = useRef(null);
   const nodeMouseDownPosRef = useRef(null);
+  const didNodeDragRef = useRef(false);
+  const ignoreNodeClickUntilRef = useRef(0);
   const edgeTypes = useMemo(
     () => ({
       parallelRelationship: ParallelRelationshipEdge,
@@ -442,6 +444,9 @@ function NetworkGraphInner({
   ]);
 
   const onNodeClick = useCallback((event, node) => {
+    if (performance.now() < ignoreNodeClickUntilRef.current) {
+      return;
+    }
     const down = nodeMouseDownPosRef.current;
     nodeMouseDownPosRef.current = null;
     if (down) {
@@ -475,13 +480,27 @@ function NetworkGraphInner({
       return;
     }
 
-    setSelectedNode(node.data.system);
+    setSelectedNode(null);
     onSelectedNodeIdsChange?.([node.id]);
-    setPopoverPos({ x: event.clientX, y: event.clientY });
   }, [onSelectedNodeIdsChange, relationshipSource]);
 
   const onWrapperMouseDown = useCallback((event) => {
     nodeMouseDownPosRef.current = { x: event.clientX, y: event.clientY };
+  }, []);
+
+  const onNodeDragStart = useCallback(() => {
+    didNodeDragRef.current = false;
+  }, []);
+
+  const onNodeDrag = useCallback(() => {
+    didNodeDragRef.current = true;
+  }, []);
+
+  const onNodeDragStop = useCallback(() => {
+    if (didNodeDragRef.current) {
+      ignoreNodeClickUntilRef.current = performance.now() + 250;
+    }
+    didNodeDragRef.current = false;
   }, []);
 
   const onNodeContextMenu = useCallback((event, node) => {
@@ -602,6 +621,13 @@ function NetworkGraphInner({
       return;
     }
 
+    if (action === "view-details") {
+      setSelectedNode(contextMenu.system);
+      setPopoverPos({ x: contextMenu.x, y: contextMenu.y });
+      setContextMenu(null);
+      return;
+    }
+
     if (action === "rename-node" || action === "edit-properties") {
       setEditSystemTarget(contextMenu.system);
       setContextMenu(null);
@@ -655,7 +681,7 @@ function NetworkGraphInner({
       onHiddenNodeIdsChange?.((prev) => prev.filter((id) => id !== targetId));
       onIsolatedNodeIdChange?.(targetId);
       onSelectedNodeIdsChange?.([targetId]);
-      setSelectedNode(contextMenu.system);
+      setSelectedNode(null);
       setContextMenu(null);
       return;
     }
@@ -670,7 +696,7 @@ function NetworkGraphInner({
       onSelectedNodeIdsChange?.((prev) =>
         prev.includes(targetId) ? prev : [...prev, targetId]
       );
-      setSelectedNode(contextMenu.system);
+      setSelectedNode(null);
       setContextMenu(null);
       return;
     }
@@ -763,12 +789,9 @@ function NetworkGraphInner({
       onSelectedNodeIdsChange?.(ids);
       if (ids.length !== 1) {
         setSelectedNode(null);
-        return;
       }
-      const selectedSystem = filteredSystemsById.get(ids[0]);
-      setSelectedNode(selectedSystem || null);
     },
-    [filteredSystemsById, onSelectedNodeIdsChange]
+    [onSelectedNodeIdsChange]
   );
 
   if (allSystems.length === 0) {
@@ -797,6 +820,9 @@ function NetworkGraphInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
         onEdgeClick={onEdgeClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
