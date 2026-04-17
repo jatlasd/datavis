@@ -30,6 +30,7 @@ export function MapGraphControls({
               size="icon"
               className="size-7"
               onClick={onRelayout}
+              data-tutorial="relayout"
             >
               <LayoutGrid className="size-3.5" />
             </Button>
@@ -44,6 +45,7 @@ export function MapGraphControls({
               size="icon"
               className="size-7"
               onClick={onFitView}
+              data-tutorial="fit-view"
             >
               <Maximize className="size-3.5" />
             </Button>
@@ -58,6 +60,7 @@ export function MapGraphControls({
               size="icon"
               className="size-7"
               onClick={onToggleDirection}
+              data-tutorial="layout-direction"
             >
               {layoutDirection === "LR" ? (
                 <ArrowUpDown className="size-3.5" />

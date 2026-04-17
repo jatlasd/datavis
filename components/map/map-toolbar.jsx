@@ -6,7 +6,18 @@ import { CONNECTION_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapGraphControls } from "@/components/map/map-graph-controls";
-import { Search, X, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+} from "lucide-react";
 
 export function MapToolbar({
   domainFilter,
@@ -27,6 +38,7 @@ export function MapToolbar({
   onClearIsolateMode,
   stats,
   hasFilters,
+  onReplayTutorial,
 }) {
   const { domains, systems, connections } = useFilteredData();
   const [filtersExpanded, setFiltersExpanded] = useState(true);
@@ -72,7 +84,7 @@ export function MapToolbar({
   return (
     <div className="border-b bg-background">
       <div className="flex items-center gap-3 px-4 py-2">
-        <div className="relative w-56">
+        <div className="relative w-56" data-tutorial="search">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search systems..."
@@ -115,7 +127,10 @@ export function MapToolbar({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-md border p-0.5">
+          <div
+            className="flex items-center rounded-md border p-0.5"
+            data-tutorial="edge-mode"
+          >
             <button
               type="button"
               onClick={() => onEdgeDisplayModeChange("separate")}
@@ -147,6 +162,7 @@ export function MapToolbar({
             size="sm"
             className="h-7 gap-1 px-2 text-xs text-muted-foreground"
             onClick={() => setFiltersExpanded((v) => !v)}
+            data-tutorial="filters-toggle"
           >
             Filters
             {hasFilters && (
@@ -175,6 +191,7 @@ export function MapToolbar({
               size="sm"
               className="h-7 px-2 text-xs"
               onClick={onShowAllHiddenNodes}
+              data-tutorial="hidden-nodes"
             >
               Show Hidden ({hiddenNodeCount})
             </Button>
@@ -185,15 +202,37 @@ export function MapToolbar({
               size="sm"
               className="h-7 px-2 text-xs"
               onClick={onClearIsolateMode}
+              data-tutorial="isolate"
             >
               Clear Isolate
             </Button>
+          )}
+          {onReplayTutorial && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onReplayTutorial}
+                  data-tutorial="replay"
+                  aria-label="Replay tutorial"
+                  className="size-7 text-muted-foreground hover:text-foreground"
+                >
+                  <HelpCircle className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Replay tutorial</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
 
       {filtersExpanded && (
         <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2">
+          <span
+            className="inline-flex flex-wrap items-center gap-2"
+            data-tutorial="filters-domains"
+          >
           <span className="text-xs font-medium text-muted-foreground">Domains:</span>
           {domains.map((d) => {
             const active = domainFilter.includes(d.id);
@@ -219,8 +258,14 @@ export function MapToolbar({
             );
           })}
 
+          </span>
+
           <div className="mx-1 h-4 w-px bg-border" />
 
+          <span
+            className="inline-flex flex-wrap items-center gap-2"
+            data-tutorial="filters-types"
+          >
           <span className="text-xs font-medium text-muted-foreground">Types:</span>
           {CONNECTION_TYPES.map((ct) => {
             const active = connectionTypeFilter.includes(ct.value);
@@ -244,6 +289,8 @@ export function MapToolbar({
               </button>
             );
           })}
+
+          </span>
 
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearAll} className="ml-1 h-6 px-2 text-xs">

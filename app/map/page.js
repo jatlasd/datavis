@@ -3,6 +3,8 @@
 import { useCallback, useState } from "react";
 import { NetworkGraph } from "@/components/map/network-graph";
 import { MapToolbar } from "@/components/map/map-toolbar";
+import { MapTutorial } from "@/components/map/map-tutorial";
+import { useMapTutorial } from "@/hooks/use-map-tutorial";
 
 export default function MapPage() {
   const [domainFilter, setDomainFilter] = useState([]);
@@ -22,6 +24,8 @@ export default function MapPage() {
     filteredConnections: 0,
     totalConnections: 0,
   });
+
+  const tutorial = useMapTutorial();
 
   const handleRelayout = useCallback(() => {
     setLayoutKey((k) => k + 1);
@@ -58,8 +62,9 @@ export default function MapPage() {
         onClearIsolateMode={() => setIsolatedNodeId(null)}
         stats={stats}
         hasFilters={hasFilters}
+        onReplayTutorial={tutorial.start}
       />
-      <div className="flex-1">
+      <div className="flex-1" data-tutorial="graph">
         <NetworkGraph
           domainFilter={domainFilter}
           connectionTypeFilter={connectionTypeFilter}
@@ -79,6 +84,7 @@ export default function MapPage() {
           onStatsChange={setStats}
         />
       </div>
+      {tutorial.isOpen && <MapTutorial onClose={tutorial.close} />}
     </div>
   );
 }
