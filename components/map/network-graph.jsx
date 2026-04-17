@@ -26,6 +26,7 @@ import { NetworkGraphContextMenu } from "@/components/map/network-graph-context-
 import { NetworkGraphRelationshipFlow } from "@/components/map/network-graph-relationship-flow";
 import { NetworkGraphGroupedEdgeDetails } from "@/components/map/network-graph-grouped-edge-details";
 import { NetworkGraphEditConnectionDialog } from "@/components/map/network-graph-edit-connection-dialog";
+import { MapShortcutHints } from "@/components/map/map-shortcut-hints";
 import { SystemForm } from "@/components/systems/system-form";
 import {
   AlertDialog,
@@ -64,7 +65,7 @@ function NetworkGraphInner({
   const connectionExists = useMapStore((s) => s.connectionExists);
   const deleteSystem = useMapStore((s) => s.deleteSystem);
   const { systems, domains, connections } = useFilteredData();
-  const { fitView, setCenter, getNodes } = useReactFlow();
+  const { fitView, setCenter, getNodes, flowToScreenPosition } = useReactFlow();
 
   const [selectedNode, setSelectedNode] = useState(null);
   const [popoverPos, setPopoverPos] = useState({ x: 0, y: 0 });
@@ -469,6 +470,113 @@ function NetworkGraphInner({
         if (relationshipSource) {
           resetRelationshipFlow();
         }
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      const target = event.target;
+      if (
+        target &&
+        typeof target.closest === "function" &&
+        target.closest('input, textarea, [contenteditable="true"]')
+      ) {
+        return;
+      }
+
+      if (
+        editSystemTarget ||
+        deleteSystemTarget ||
+        editingConnectionId ||
+        contextMenu ||
+        relationshipTarget ||
+        groupedEdgeDetails
+      ) {
+        return;
+      }
+
+      if (selectedNodeIds.length !== 1) return;
+      const selectedId = selectedNodeIds[0];
+      const system = allSystemsById.get(selectedId);
+      if (!system) return;
+
+      const key = event.key.toLowerCase();
+
+      if (key === "h") {
+        event.preventDefault();
+        if (hiddenNodeIdSet.has(selectedId)) {
+          onHiddenNodeIdsChange?.((prev) => prev.filter((id) => id !== selectedId));
+        } else {
+          onHiddenNodeIdsChange?.((prev) =>
+            prev.includes(selectedId) ? prev : [...prev, selectedId]
+          );
+          onSelectedNodeIdsChange?.((prev) => prev.filter((id) => id !== selectedId));
+          if (isolatedNodeId === selectedId) onIsolatedNodeIdChange?.(null);
+          setSelectedNode(null);
+        }
+        return;
+      }
+
+      if (hiddenNodeIdSet.has(selectedId)) return;
+
+      if (key === "p") {
+        event.preventDefault();
+        if (pinnedNodeIdSet.has(selectedId)) {
+          onPinnedNodeIdsChange?.((prev) => prev.filter((id) => id !== selectedId));
+        } else {
+          onPinnedNodeIdsChange?.((prev) =>
+            prev.includes(selectedId) ? prev : [...prev, selectedId]
+          );
+        }
+        return;
+      }
+
+      if (key === "i") {
+        event.preventDefault();
+        if (isolatedNodeId === selectedId) {
+          onIsolatedNodeIdChange?.(null);
+        } else {
+          onHiddenNodeIdsChange?.((prev) => prev.filter((id) => id !== selectedId));
+          onIsolatedNodeIdChange?.(selectedId);
+          onSelectedNodeIdsChange?.([selectedId]);
+          setSelectedNode(null);
+        }
+        return;
+      }
+
+      if (key === "r" || key === "e") {
+        event.preventDefault();
+        setEditSystemTarget(system);
+        return;
+      }
+
+      if (key === "c") {
+        event.preventDefault();
+        setRelationshipSource(system);
+        setRelationshipTarget(null);
+        setSelectedNode(null);
+        onSelectedNodeIdsChange?.([]);
+        return;
+      }
+
+      if (key === "v" || event.key === "Enter") {
+        event.preventDefault();
+        const flowNodes = getNodes();
+        const flowNode = flowNodes.find((n) => n.id === selectedId);
+        if (flowNode) {
+          const screenPos = flowToScreenPosition({
+            x: flowNode.position.x + NODE_WIDTH / 2,
+            y: flowNode.position.y + NODE_HEIGHT / 2,
+          });
+          setPopoverPos({ x: screenPos.x, y: screenPos.y });
+        } else {
+          setPopoverPos({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          });
+        }
+        setSelectedNode(system);
+        return;
       }
     }
 
@@ -486,6 +594,19 @@ function NetworkGraphInner({
     groupedEdgeDetails,
     closeConnectionEditor,
     resetRelationshipFlow,
+    selectedNodeIds,
+    hiddenNodeIdSet,
+    pinnedNodeIdSet,
+    isolatedNodeId,
+    allSystemsById,
+    editSystemTarget,
+    deleteSystemTarget,
+    editingConnectionId,
+    onHiddenNodeIdsChange,
+    onPinnedNodeIdsChange,
+    onIsolatedNodeIdChange,
+    getNodes,
+    flowToScreenPosition,
   ]);
 
   const onNodeClick = useCallback((event, node) => {
@@ -886,6 +1007,8 @@ function NetworkGraphInner({
           maskColor="rgba(255,255,255,0.7)"
         />
       </ReactFlow>
+
+      <MapShortcutHints active={selectedNodeIds.length === 1} />
 
       {selectedNode && (
         <SystemNodePopover
