@@ -235,17 +235,20 @@ export function MapTutorial({ onClose }) {
     function handleKey(event) {
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         onClose?.();
       } else if (event.key === "ArrowRight" || event.key === "Enter") {
         event.preventDefault();
+        event.stopPropagation();
         handleNext();
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
+        event.stopPropagation();
         handleBack();
       }
     }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    window.addEventListener("keydown", handleKey, true);
+    return () => window.removeEventListener("keydown", handleKey, true);
   }, [onClose, handleNext, handleBack]);
 
   useLayoutEffect(() => {
@@ -281,11 +284,13 @@ export function MapTutorial({ onClose }) {
       measure();
       raf2 = window.requestAnimationFrame(measure);
     });
+    const interval = window.setInterval(measure, 250);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     return () => {
       window.cancelAnimationFrame(raf1);
       window.cancelAnimationFrame(raf2);
+      window.clearInterval(interval);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
