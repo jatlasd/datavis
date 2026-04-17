@@ -195,24 +195,19 @@ function computePanelPosition({ rect, placement, panelSize, viewport }) {
   return { top, left };
 }
 
-function findNextIndex(start, direction, steps) {
-  let next = start;
-  while (next >= 0 && next < steps.length) {
-    const step = steps[next];
-    if (!step.target || !step.optional) return next;
-    if (getTargetRect(step.target)) return next;
-    next += direction;
-  }
-  return -1;
+function buildVisibleSteps() {
+  return TUTORIAL_STEPS.filter((step) => {
+    if (!step.target) return true;
+    if (!step.optional) return true;
+    return Boolean(getTargetRect(step.target));
+  });
 }
 
 export function MapTutorial({ onClose }) {
-  const visibleSteps = useMemo(() => TUTORIAL_STEPS, []);
-  const [stepIndex, setStepIndex] = useState(() => {
-    const found = findNextIndex(0, 1, TUTORIAL_STEPS);
-    return found === -1 ? 0 : found;
-  });
+  const [visibleSteps] = useState(() => buildVisibleSteps());
+  const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState(null);
+  const [rectTargetId, setRectTargetId] = useState(null);
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 0 : window.innerWidth,
     height: typeof window === "undefined" ? 0 : window.innerHeight,
@@ -220,31 +215,21 @@ export function MapTutorial({ onClose }) {
   const [panelSize, setPanelSize] = useState({ width: 320, height: 160 });
   const panelRef = useRef(null);
 
-  const advance = useCallback(
-    (direction) => {
-      setStepIndex((prev) => {
-        const next = findNextIndex(prev + direction, direction, visibleSteps);
-        return next === -1 ? prev : next;
-      });
-    },
-    [visibleSteps]
-  );
-
   const step = visibleSteps[stepIndex];
+  const total = visibleSteps.length;
 
   const handleNext = useCallback(() => {
-    const nextIdx = findNextIndex(stepIndex + 1, 1, visibleSteps);
-    if (nextIdx === -1) {
+    if (stepIndex >= total - 1) {
       onClose?.();
       return;
     }
-    setStepIndex(nextIdx);
-  }, [onClose, stepIndex, visibleSteps]);
+    setStepIndex(stepIndex + 1);
+  }, [onClose, stepIndex, total]);
 
   const handleBack = useCallback(() => {
     if (stepIndex === 0) return;
-    advance(-1);
-  }, [advance, stepIndex]);
+    setStepIndex(stepIndex - 1);
+  }, [stepIndex]);
 
   useEffect(() => {
     function handleKey(event) {
@@ -265,12 +250,21 @@ export function MapTutorial({ onClose }) {
 
   useLayoutEffect(() => {
     if (!step) return;
+    let raf1 = 0;
+    let raf2 = 0;
+    const activeTarget =
+      step.target && step.placement !== "center" ? step.target : null;
     function measure() {
       setViewport({ width: window.innerWidth, height: window.innerHeight });
-      if (step.target && step.placement !== "center") {
-        setRect(getTargetRect(step.target));
+      if (activeTarget) {
+        const next = getTargetRect(activeTarget);
+        if (next) {
+          setRect(next);
+          setRectTargetId(activeTarget);
+        }
       } else {
         setRect(null);
+        setRectTargetId(null);
       }
       if (panelRef.current) {
         const box = panelRef.current.getBoundingClientRect();
@@ -283,11 +277,15 @@ export function MapTutorial({ onClose }) {
       }
     }
     measure();
-    const id = window.requestAnimationFrame(measure);
+    raf1 = window.requestAnimationFrame(() => {
+      measure();
+      raf2 = window.requestAnimationFrame(measure);
+    });
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     return () => {
-      window.cancelAnimationFrame(id);
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
@@ -297,7 +295,10 @@ export function MapTutorial({ onClose }) {
   if (typeof document === "undefined") return null;
 
   const isMobile = viewport.width < 640;
-  const isCenter = step.placement === "center" || !step.target || !rect;
+  const hasActiveSpotlight = Boolean(
+    rect && rectTargetId && rectTargetId === step.target && step.placement !== "center"
+  );
+  const isCenter = !hasActiveSpotlight;
 
   const panelStyle = (() => {
     if (isMobile) {
@@ -322,7 +323,7 @@ export function MapTutorial({ onClose }) {
     };
   })();
 
-  const spotlightStyle = rect
+  const spotlightStyle = hasActiveSpotlight
     ? {
         top: rect.top - SPOTLIGHT_PADDING,
         left: rect.left - SPOTLIGHT_PADDING,
@@ -330,8 +331,6 @@ export function MapTutorial({ onClose }) {
         height: rect.height + SPOTLIGHT_PADDING * 2,
       }
     : null;
-
-  const total = visibleSteps.length;
 
   return createPortal(
     <div
