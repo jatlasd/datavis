@@ -1,11 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { Separator } from "@/components/ui/separator";
-import { AppSidebar } from "@/components/app-sidebar";
-import { ActiveProfileBadge } from "@/components/active-profile-badge";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,20 +25,7 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <TooltipProvider>
-          <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>
-              <header className="flex h-12 items-center gap-2 border-b px-4">
-                <SidebarTrigger />
-                <Separator orientation="vertical" className="mr-2 h-4" />
-                <span>Datapus</span>
-                <ActiveProfileBadge />
-              </header>
-              <main>{children}</main>
-            </SidebarInset>
-          </SidebarProvider>
-        </TooltipProvider>
+        <TooltipProvider>{children}</TooltipProvider>
         <Toaster />
       </body>
     </html>
