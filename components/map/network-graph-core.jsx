@@ -70,7 +70,6 @@ function NetworkGraphInner({
   const nodeMouseDownPosRef = useRef(null);
   const didNodeDragRef = useRef(false);
   const ignoreNodeClickUntilRef = useRef(0);
-  const ignoreNextSelectionChangeRef = useRef(false);
   const nodePositionsRef = useRef(new Map());
   const layoutSignatureRef = useRef(`${layoutDirection}:${layoutKey}`);
 
@@ -627,7 +626,6 @@ function NetworkGraphInner({
 
   const onEdgeClick = useCallback(
     (event, edge) => {
-      ignoreNextSelectionChangeRef.current = true;
       setContextMenu(null);
       setRelationshipTarget(null);
 
@@ -802,18 +800,6 @@ function NetworkGraphInner({
     ]
   );
 
-  const handleSelectionChange = useCallback(
-    ({ nodes: selectedFlowNodes = [] }) => {
-      if (ignoreNextSelectionChangeRef.current) {
-        ignoreNextSelectionChangeRef.current = false;
-        return;
-      }
-      const ids = selectedFlowNodes.map((node) => node.id);
-      onSelectionChange?.(createMultiMapSelection(ids));
-    },
-    [onSelectionChange]
-  );
-
   if (allSystems.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -846,12 +832,11 @@ function NetworkGraphInner({
         onEdgeClick={onEdgeClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
-        onSelectionChange={handleSelectionChange}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         nodesDraggable
         nodesConnectable={false}
-        elementsSelectable
+        elementsSelectable={false}
         minZoom={0.2}
         maxZoom={2}
       >
