@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { getConnectionType } from "@/lib/constants";
@@ -107,17 +107,19 @@ function ConnectionEditor({
   connection,
   sourceName,
   targetName,
-  draftType,
-  draftNote,
-  hasChanges,
-  onTypeChange,
-  onNoteChange,
   onSave,
   onDelete,
   onSelectNode,
   allConnectionTypes,
 }) {
+  const [draftType, setDraftType] = useState(connection?.type || "");
+  const [draftNote, setDraftNote] = useState(connection?.note || "");
+
   if (!connection) return null;
+
+  const hasChanges =
+    Boolean(draftType) &&
+    (draftType !== connection.type || draftNote.trim() !== (connection.note || ""));
 
   return (
     <>
@@ -147,7 +149,7 @@ function ConnectionEditor({
         <div className="space-y-3">
           <div className="space-y-2">
             <Label>Relationship type</Label>
-            <Select value={draftType} onValueChange={onTypeChange}>
+            <Select value={draftType} onValueChange={setDraftType}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select relationship type" />
               </SelectTrigger>
@@ -171,12 +173,21 @@ function ConnectionEditor({
               id="map-inspector-connection-note"
               rows={4}
               value={draftNote}
-              onChange={(event) => onNoteChange(event.target.value)}
+              onChange={(event) => setDraftNote(event.target.value)}
               placeholder="Add context for this relationship"
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={onSave} disabled={!draftType || !hasChanges}>
+            <Button
+              type="button"
+              onClick={() =>
+                onSave({
+                  type: draftType,
+                  note: draftNote,
+                })
+              }
+              disabled={!draftType || !hasChanges}
+            >
               Save relationship
             </Button>
             <Button type="button" variant="destructive" onClick={onDelete}>
@@ -384,9 +395,6 @@ export function MapInspector({
   hiddenNodeIdSet,
   pinnedNodeIdSet,
   isolatedNodeId,
-  connectionDraft,
-  onConnectionDraftTypeChange,
-  onConnectionDraftNoteChange,
   onSaveConnection,
   onDeleteConnection,
   onEditNode,
@@ -473,15 +481,6 @@ export function MapInspector({
     0
   );
 
-  const hasConnectionChanges = Boolean(
-    activeConnection &&
-      connectionDraft.type &&
-      (
-        connectionDraft.type !== activeConnection.type ||
-        connectionDraft.note.trim() !== (activeConnection.note || "")
-      )
-  );
-
   return (
     <ScrollArea className="h-full">
       <div className="space-y-5 p-4">
@@ -556,14 +555,10 @@ export function MapInspector({
             )}
 
             <ConnectionEditor
+              key={activeConnection.id}
               connection={activeConnection}
               sourceName={edgeSourceName}
               targetName={edgeTargetName}
-              draftType={connectionDraft.type}
-              draftNote={connectionDraft.note}
-              hasChanges={hasConnectionChanges}
-              onTypeChange={onConnectionDraftTypeChange}
-              onNoteChange={onConnectionDraftNoteChange}
               onSave={onSaveConnection}
               onDelete={onDeleteConnection}
               onSelectNode={onSelectNode}

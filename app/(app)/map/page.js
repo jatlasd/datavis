@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { NetworkGraph } from "@/components/map/network-graph";
 import { MapInspector } from "@/components/map/map-inspector";
 import { MapToolbar } from "@/components/map/map-toolbar";
@@ -9,7 +9,6 @@ import { CONNECTION_TYPES } from "@/lib/constants";
 import {
   createEmptyMapSelection,
   createNodeMapSelection,
-  isSameMapSelection,
   sanitizeMapSelection,
 } from "@/lib/map-selection";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -58,10 +57,6 @@ export default function MapPage() {
   const [relationshipSource, setRelationshipSource] = useState(null);
   const [editSystemTarget, setEditSystemTarget] = useState(null);
   const [deleteSystemTarget, setDeleteSystemTarget] = useState(null);
-  const [connectionDraft, setConnectionDraft] = useState({
-    type: "",
-    note: "",
-  });
   const [stats, setStats] = useState({
     filteredSystems: 0,
     totalSystems: 0,
@@ -90,53 +85,21 @@ export default function MapPage() {
   );
   const hiddenNodeIdSet = useMemo(() => new Set(hiddenNodeIds), [hiddenNodeIds]);
   const pinnedNodeIdSet = useMemo(() => new Set(pinnedNodeIds), [pinnedNodeIds]);
-
-  useEffect(() => {
-    const nextSelection = sanitizeMapSelection(selection, {
-      systemIds: new Set(systems.map((system) => system.id)),
-      connectionIds: new Set(connections.map((connection) => connection.id)),
-    });
-
-    setSelection((currentSelection) =>
-      isSameMapSelection(currentSelection, nextSelection)
-        ? currentSelection
-        : nextSelection
-    );
-  }, [connections, selection, systems]);
+  const sanitizedSelection = useMemo(
+    () =>
+      sanitizeMapSelection(selection, {
+        systemIds: new Set(systems.map((system) => system.id)),
+        connectionIds: new Set(connections.map((connection) => connection.id)),
+      }),
+    [connections, selection, systems]
+  );
 
   const activeConnectionId =
-    selection.kind === "edge"
-      ? selection.connectionId
-      : selection.kind === "grouped-edge"
-        ? selection.activeConnectionId
+    sanitizedSelection.kind === "edge"
+      ? sanitizedSelection.connectionId
+      : sanitizedSelection.kind === "grouped-edge"
+        ? sanitizedSelection.activeConnectionId
         : null;
-
-  useEffect(() => {
-    const activeConnection = activeConnectionId
-      ? connectionsById.get(activeConnectionId)
-      : null;
-
-    if (!activeConnection) {
-      setConnectionDraft({ type: "", note: "" });
-      return;
-    }
-
-    setConnectionDraft((currentDraft) => {
-      const nextDraft = {
-        type: activeConnection.type,
-        note: activeConnection.note || "",
-      };
-
-      if (
-        currentDraft.type === nextDraft.type &&
-        currentDraft.note === nextDraft.note
-      ) {
-        return currentDraft;
-      }
-
-      return nextDraft;
-    });
-  }, [activeConnectionId, connectionsById]);
 
   const handleRelayout = useCallback(() => {
     setLayoutKey((k) => k + 1);
@@ -188,34 +151,39 @@ export default function MapPage() {
     setSelection(createNodeMapSelection(nodeId));
   }, []);
 
-  const handleSaveConnection = useCallback(() => {
-    const activeConnection = activeConnectionId
-      ? connectionsById.get(activeConnectionId)
-      : null;
-    if (!activeConnection) return;
-    if (!connectionDraft.type) return;
+  const handleSaveConnection = useCallback(
+    ({ type, note }) => {
+      const activeConnection = activeConnectionId
+        ? connectionsById.get(activeConnectionId)
+        : null;
+      if (!activeConnection) return false;
+      if (!type) return false;
 
-    const hasDuplicate = connections.some(
-      (connection) =>
-        connection.id !== activeConnection.id &&
-        ((connection.sourceId === activeConnection.sourceId &&
-          connection.targetId === activeConnection.targetId) ||
-          (connection.sourceId === activeConnection.targetId &&
-            connection.targetId === activeConnection.sourceId)) &&
-        connection.type === connectionDraft.type
-    );
+      const trimmedNote = note.trim();
+      const hasDuplicate = connections.some(
+        (connection) =>
+          connection.id !== activeConnection.id &&
+          ((connection.sourceId === activeConnection.sourceId &&
+            connection.targetId === activeConnection.targetId) ||
+            (connection.sourceId === activeConnection.targetId &&
+              connection.targetId === activeConnection.sourceId)) &&
+          connection.type === type
+      );
 
-    if (hasDuplicate) {
-      toast.error("This connection already exists");
-      return;
-    }
+      if (hasDuplicate) {
+        toast.error("This connection already exists");
+        return false;
+      }
 
-    updateConnection(activeConnection.id, {
-      type: connectionDraft.type,
-      note: connectionDraft.note.trim() || null,
-    });
-    toast.success("Relationship updated");
-  }, [activeConnectionId, connectionDraft, connections, connectionsById, updateConnection]);
+      updateConnection(activeConnection.id, {
+        type,
+        note: trimmedNote || null,
+      });
+      toast.success("Relationship updated");
+      return true;
+    },
+    [activeConnectionId, connections, connectionsById, updateConnection]
+  );
 
   const handleDeleteConnection = useCallback(() => {
     if (!activeConnectionId) return;
@@ -280,7 +248,7 @@ export default function MapPage() {
             onHiddenNodeIdsChange={setHiddenNodeIds}
             pinnedNodeIds={pinnedNodeIds}
             onPinnedNodeIdsChange={setPinnedNodeIds}
-            selection={selection}
+            selection={sanitizedSelection}
             onSelectionChange={handleSelectionChange}
             isolatedNodeId={isolatedNodeId}
             onIsolatedNodeIdChange={setIsolatedNodeId}
@@ -294,7 +262,7 @@ export default function MapPage() {
         </div>
         <aside className="hidden h-full w-[360px] shrink-0 border-l bg-background lg:block">
           <MapInspector
-            selection={selection}
+            selection={sanitizedSelection}
             systemsById={systemsById}
             connectionsById={connectionsById}
             domainsById={domainsById}
@@ -303,13 +271,6 @@ export default function MapPage() {
             hiddenNodeIdSet={hiddenNodeIdSet}
             pinnedNodeIdSet={pinnedNodeIdSet}
             isolatedNodeId={isolatedNodeId}
-            connectionDraft={connectionDraft}
-            onConnectionDraftTypeChange={(type) =>
-              setConnectionDraft((prev) => ({ ...prev, type }))
-            }
-            onConnectionDraftNoteChange={(note) =>
-              setConnectionDraft((prev) => ({ ...prev, note }))
-            }
             onSaveConnection={handleSaveConnection}
             onDeleteConnection={handleDeleteConnection}
             onEditNode={setEditSystemTarget}
@@ -324,7 +285,7 @@ export default function MapPage() {
         </aside>
       </div>
       <Sheet
-        open={isMobile && selection.kind !== "empty"}
+        open={isMobile && sanitizedSelection.kind !== "empty"}
         onOpenChange={(open) => {
           if (!open) {
             setSelection(createEmptyMapSelection());
@@ -343,7 +304,7 @@ export default function MapPage() {
           </SheetHeader>
           <div className="min-h-0 flex-1">
             <MapInspector
-              selection={selection}
+              selection={sanitizedSelection}
               systemsById={systemsById}
               connectionsById={connectionsById}
               domainsById={domainsById}
@@ -352,13 +313,6 @@ export default function MapPage() {
               hiddenNodeIdSet={hiddenNodeIdSet}
               pinnedNodeIdSet={pinnedNodeIdSet}
               isolatedNodeId={isolatedNodeId}
-              connectionDraft={connectionDraft}
-              onConnectionDraftTypeChange={(type) =>
-                setConnectionDraft((prev) => ({ ...prev, type }))
-              }
-              onConnectionDraftNoteChange={(note) =>
-                setConnectionDraft((prev) => ({ ...prev, note }))
-              }
               onSaveConnection={handleSaveConnection}
               onDeleteConnection={handleDeleteConnection}
               onEditNode={setEditSystemTarget}

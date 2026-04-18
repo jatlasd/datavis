@@ -51,6 +51,7 @@ function NetworkGraphInner({
   onRelationshipSourceChange,
   onRequestEditSystem,
   onRequestDeleteSystem,
+  hasBlockingDialog,
 }) {
   const allSystems = useMapStore((s) => s.systems);
   const allConnections = useMapStore((s) => s.connections);
@@ -329,11 +330,12 @@ function NetworkGraphInner({
     setNodes((prevNodes) =>
       prevNodes.map((node) => {
         const isSelected = selectedNodeIdSet.has(node.id);
-        if (node.data?.isSelected === isSelected) {
+        if (node.data?.isSelected === isSelected && node.selected === isSelected) {
           return node;
         }
         return {
           ...node,
+          selected: isSelected,
           data: {
             ...node.data,
             isSelected,
@@ -392,12 +394,6 @@ function NetworkGraphInner({
   }, [onRelationshipSourceChange]);
 
   useEffect(() => {
-    if (!relationshipSource) {
-      setRelationshipTarget(null);
-    }
-  }, [relationshipSource]);
-
-  useEffect(() => {
     function handlePointerDown(event) {
       if (
         contextMenu &&
@@ -438,7 +434,7 @@ function NetworkGraphInner({
         return;
       }
 
-      if (contextMenu || relationshipTarget || relationshipSource) {
+      if (hasBlockingDialog || contextMenu || relationshipTarget || relationshipSource) {
         return;
       }
 
@@ -518,6 +514,7 @@ function NetworkGraphInner({
     onRequestEditSystem,
     onSelectionChange,
     pinnedNodeIdSet,
+    hasBlockingDialog,
     relationshipSource,
     relationshipTarget,
     resetRelationshipFlow,
