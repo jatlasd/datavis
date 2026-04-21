@@ -7,7 +7,7 @@ const SHORTCUTS = [
   { key: "C", label: "Connect" },
   { key: "R", label: "Rename" },
   { key: "E", label: "Edit" },
-  { key: "V", label: "Details" },
+  { key: "V", label: "Inspector" },
   { key: "Esc", label: "Clear" },
 ];
 

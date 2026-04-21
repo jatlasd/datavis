@@ -4,7 +4,10 @@ import { useCallback, useState } from "react";
 import { NetworkGraph } from "@/components/map/network-graph";
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { MapTutorial } from "@/components/map/map-tutorial";
+import { MapInspectorShell } from "@/components/map/map-inspector/map-inspector-shell";
 import { useMapTutorial } from "@/hooks/use-map-tutorial";
+import { useMediaQuery } from "@/hooks/use-media-query";
+import { emptyInspectorSelection } from "@/lib/map-inspector-selection";
 
 export default function MapPage() {
   const [domainFilter, setDomainFilter] = useState([]);
@@ -18,6 +21,9 @@ export default function MapPage() {
   const [isolatedNodeId, setIsolatedNodeId] = useState(null);
   const [layoutKey, setLayoutKey] = useState(0);
   const [fitViewKey, setFitViewKey] = useState(0);
+  const [inspectorSelection, setInspectorSelection] = useState(
+    emptyInspectorSelection()
+  );
   const [stats, setStats] = useState({
     filteredSystems: 0,
     totalSystems: 0,
@@ -25,7 +31,13 @@ export default function MapPage() {
     totalConnections: 0,
   });
 
+  const isDesktop = useMediaQuery("(min-width: 768px)");
   const tutorial = useMapTutorial();
+
+  const clearMapSelection = useCallback(() => {
+    setInspectorSelection(emptyInspectorSelection());
+    setSelectedNodeIds([]);
+  }, []);
 
   const handleRelayout = useCallback(() => {
     setLayoutKey((k) => k + 1);
@@ -64,25 +76,42 @@ export default function MapPage() {
         hasFilters={hasFilters}
         onReplayTutorial={tutorial.start}
       />
-      <div className="flex-1" data-tutorial="graph">
-        <NetworkGraph
-          domainFilter={domainFilter}
-          connectionTypeFilter={connectionTypeFilter}
-          searchQuery={searchQuery}
-          layoutDirection={layoutDirection}
-          edgeDisplayMode={edgeDisplayMode}
-          layoutKey={layoutKey}
-          fitViewKey={fitViewKey}
-          hiddenNodeIds={hiddenNodeIds}
-          onHiddenNodeIdsChange={setHiddenNodeIds}
-          pinnedNodeIds={pinnedNodeIds}
-          onPinnedNodeIdsChange={setPinnedNodeIds}
-          selectedNodeIds={selectedNodeIds}
-          onSelectedNodeIdsChange={setSelectedNodeIds}
-          isolatedNodeId={isolatedNodeId}
-          onIsolatedNodeIdChange={setIsolatedNodeId}
-          onStatsChange={setStats}
-        />
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        data-tutorial="graph"
+      >
+      <NetworkGraph
+        domainFilter={domainFilter}
+        connectionTypeFilter={connectionTypeFilter}
+        searchQuery={searchQuery}
+        layoutDirection={layoutDirection}
+        edgeDisplayMode={edgeDisplayMode}
+        layoutKey={layoutKey}
+        fitViewKey={fitViewKey}
+        hiddenNodeIds={hiddenNodeIds}
+        onHiddenNodeIdsChange={setHiddenNodeIds}
+        pinnedNodeIds={pinnedNodeIds}
+        onPinnedNodeIdsChange={setPinnedNodeIds}
+        selectedNodeIds={selectedNodeIds}
+        onSelectedNodeIdsChange={setSelectedNodeIds}
+        isolatedNodeId={isolatedNodeId}
+        onIsolatedNodeIdChange={setIsolatedNodeId}
+        onStatsChange={setStats}
+        setInspectorSelection={setInspectorSelection}
+        onClearMapSelection={clearMapSelection}
+        renderInspector={(graphHandlers) => (
+          <MapInspectorShell
+            selection={inspectorSelection}
+            setSelection={setInspectorSelection}
+            isDesktop={isDesktop}
+            onClear={clearMapSelection}
+            hiddenNodeIds={hiddenNodeIds}
+            pinnedNodeIds={pinnedNodeIds}
+            isolatedNodeId={isolatedNodeId}
+            {...graphHandlers}
+          />
+        )}
+      />
       </div>
       {tutorial.isOpen && <MapTutorial onClose={tutorial.close} />}
     </div>

@@ -14,19 +14,17 @@ import "@xyflow/react/dist/style.css";
 import { useMapStore } from "@/store/use-map-store";
 import { useFilteredData } from "@/hooks/use-filtered-data";
 import { useNetworkGraphElements } from "@/hooks/use-network-graph-elements";
-import {
-  NODE_HEIGHT,
-  NODE_WIDTH,
-  MUTED_EDGE_COLOR,
-} from "@/lib/network-graph-layout";
-import { SystemNodePopover } from "@/components/map/system-popover";
+import { NODE_HEIGHT, NODE_WIDTH } from "@/lib/network-graph-layout";
 import { ParallelRelationshipEdge } from "@/components/map/parallel-relationship-edge";
 import { TypedSystemNode } from "@/components/map/typed-system-node";
 import { NetworkGraphContextMenu } from "@/components/map/network-graph-context-menu";
 import { NetworkGraphRelationshipFlow } from "@/components/map/network-graph-relationship-flow";
-import { NetworkGraphGroupedEdgeDetails } from "@/components/map/network-graph-grouped-edge-details";
-import { NetworkGraphEditConnectionDialog } from "@/components/map/network-graph-edit-connection-dialog";
 import { MapShortcutHints } from "@/components/map/map-shortcut-hints";
+import {
+  edgeSelection,
+  emptyInspectorSelection,
+  inspectorSelectionFromNodeIds,
+} from "@/lib/map-inspector-selection";
 import { SystemForm } from "@/components/systems/system-form";
 import {
   AlertDialog,
@@ -57,18 +55,18 @@ function NetworkGraphInner({
   isolatedNodeId,
   onIsolatedNodeIdChange,
   onStatsChange,
+  setInspectorSelection,
+  onClearMapSelection,
+  renderInspector,
 }) {
   const allSystems = useMapStore((s) => s.systems);
   const allConnections = useMapStore((s) => s.connections);
   const addConnection = useMapStore((s) => s.addConnection);
-  const updateConnection = useMapStore((s) => s.updateConnection);
   const connectionExists = useMapStore((s) => s.connectionExists);
   const deleteSystem = useMapStore((s) => s.deleteSystem);
   const { systems, domains, connections } = useFilteredData();
-  const { fitView, setCenter, getNodes, flowToScreenPosition } = useReactFlow();
+  const { fitView, setCenter, getNodes } = useReactFlow();
 
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [popoverPos, setPopoverPos] = useState({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState(null);
   const [relationshipSource, setRelationshipSource] = useState(null);
   const [relationshipTarget, setRelationshipTarget] = useState(null);
@@ -78,13 +76,8 @@ function NetworkGraphInner({
   });
   const [editSystemTarget, setEditSystemTarget] = useState(null);
   const [deleteSystemTarget, setDeleteSystemTarget] = useState(null);
-  const [groupedEdgeDetails, setGroupedEdgeDetails] = useState(null);
-  const [editingConnectionId, setEditingConnectionId] = useState(null);
-  const [editingConnectionType, setEditingConnectionType] = useState("");
-  const [editingConnectionNote, setEditingConnectionNote] = useState("");
   const contextMenuRef = useRef(null);
   const relationshipTypeMenuRef = useRef(null);
-  const groupedEdgeDetailsRef = useRef(null);
   const nodeMouseDownPosRef = useRef(null);
   const didNodeDragRef = useRef(false);
   const ignoreNodeClickUntilRef = useRef(0);
@@ -153,10 +146,6 @@ function NetworkGraphInner({
     () => new Map(filteredSystems.map((sys) => [sys.id, sys])),
     [filteredSystems]
   );
-  const allConnectionsById = useMemo(
-    () => new Map(allConnections.map((connection) => [connection.id, connection])),
-    [allConnections]
-  );
   const allSystemsById = useMemo(
     () => new Map(allSystems.map((system) => [system.id, system])),
     [allSystems]
@@ -178,6 +167,7 @@ function NetworkGraphInner({
     const nextSelected = selectedNodeIds.filter((id) => allSystemIdSet.has(id));
     if (nextSelected.length !== selectedNodeIds.length) {
       onSelectedNodeIdsChange?.(nextSelected);
+      setInspectorSelection(inspectorSelectionFromNodeIds(nextSelected));
     }
     if (isolatedNodeId && !allSystemIdSet.has(isolatedNodeId)) {
       onIsolatedNodeIdChange?.(null);
@@ -192,6 +182,7 @@ function NetworkGraphInner({
     onSelectedNodeIdsChange,
     pinnedNodeIds,
     selectedNodeIds,
+    setInspectorSelection,
   ]);
 
   useEffect(() => {
@@ -399,38 +390,64 @@ function NetworkGraphInner({
     setRelationshipTarget(null);
   }, []);
 
-  const closeConnectionEditor = useCallback(() => {
-    setEditingConnectionId(null);
-    setEditingConnectionType("");
-    setEditingConnectionNote("");
-  }, []);
-
-  const openConnectionEditor = useCallback(
-    (connectionId) => {
-      const connection = allConnectionsById.get(connectionId);
-      if (!connection) return;
-      setSelectedNode(null);
-      setContextMenu(null);
-      setRelationshipSource(null);
-      setRelationshipTarget(null);
-      setGroupedEdgeDetails(null);
-      setEditingConnectionId(connection.id);
-      setEditingConnectionType(connection.type);
-      setEditingConnectionNote(connection.note || "");
-    },
-    [allConnectionsById]
+  const inspectorHandlers = useMemo(
+    () => ({
+      startRelationshipFromSystem: (system) => {
+        setRelationshipSource(system);
+        setRelationshipTarget(null);
+        setContextMenu(null);
+        setInspectorSelection(emptyInspectorSelection());
+        onSelectedNodeIdsChange?.([]);
+      },
+      openSystemEdit: (system) => {
+        setEditSystemTarget(system);
+      },
+      confirmDeleteSystem: (system) => {
+        setDeleteSystemTarget(system);
+      },
+      hideNodes: (ids) => {
+        onHiddenNodeIdsChange?.((prev) => [
+          ...prev,
+          ...ids.filter((id) => !prev.includes(id)),
+        ]);
+        onSelectedNodeIdsChange?.((prev) =>
+          prev.filter((id) => !ids.includes(id))
+        );
+        if (ids.includes(isolatedNodeId)) {
+          onIsolatedNodeIdChange?.(null);
+        }
+        setInspectorSelection(emptyInspectorSelection());
+      },
+      unhideNode: (id) => {
+        onHiddenNodeIdsChange?.((prev) => prev.filter((nid) => nid !== id));
+      },
+      pinNodes: (ids) => {
+        onPinnedNodeIdsChange?.((prev) => [
+          ...new Set([...prev, ...ids.filter((id) => !prev.includes(id))]),
+        ]);
+      },
+      unpinNode: (id) => {
+        onPinnedNodeIdsChange?.((prev) => prev.filter((nid) => nid !== id));
+      },
+      isolateNode: (id) => {
+        onHiddenNodeIdsChange?.((prev) => prev.filter((nid) => nid !== id));
+        onIsolatedNodeIdChange?.(id);
+        onSelectedNodeIdsChange?.([id]);
+        setInspectorSelection({ kind: "node", systemId: id });
+      },
+      clearIsolate: () => {
+        onIsolatedNodeIdChange?.(null);
+      },
+    }),
+    [
+      isolatedNodeId,
+      onHiddenNodeIdsChange,
+      onIsolatedNodeIdChange,
+      onPinnedNodeIdsChange,
+      onSelectedNodeIdsChange,
+      setInspectorSelection,
+    ]
   );
-
-  const editingConnection = useMemo(
-    () => (editingConnectionId ? allConnectionsById.get(editingConnectionId) : null),
-    [editingConnectionId, allConnectionsById]
-  );
-  const editingSourceName = editingConnection
-    ? allSystemsById.get(editingConnection.sourceId)?.name || "Unknown"
-    : "";
-  const editingTargetName = editingConnection
-    ? allSystemsById.get(editingConnection.targetId)?.name || "Unknown"
-    : "";
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -450,23 +467,13 @@ function NetworkGraphInner({
         setRelationshipTarget(null);
       }
 
-      if (
-        groupedEdgeDetails &&
-        groupedEdgeDetailsRef.current &&
-        !groupedEdgeDetailsRef.current.contains(event.target)
-      ) {
-        setGroupedEdgeDetails(null);
-      }
     }
 
     function handleKeyDown(event) {
       if (event.key === "Escape") {
         setContextMenu(null);
-        setSelectedNode(null);
-        onSelectedNodeIdsChange?.([]);
         setRelationshipTarget(null);
-        setGroupedEdgeDetails(null);
-        closeConnectionEditor();
+        onClearMapSelection?.();
         if (relationshipSource) {
           resetRelationshipFlow();
         }
@@ -487,10 +494,8 @@ function NetworkGraphInner({
       if (
         editSystemTarget ||
         deleteSystemTarget ||
-        editingConnectionId ||
         contextMenu ||
-        relationshipTarget ||
-        groupedEdgeDetails
+        relationshipTarget
       ) {
         return;
       }
@@ -512,7 +517,7 @@ function NetworkGraphInner({
           );
           onSelectedNodeIdsChange?.((prev) => prev.filter((id) => id !== selectedId));
           if (isolatedNodeId === selectedId) onIsolatedNodeIdChange?.(null);
-          setSelectedNode(null);
+          setInspectorSelection(emptyInspectorSelection());
         }
         return;
       }
@@ -539,7 +544,7 @@ function NetworkGraphInner({
           onHiddenNodeIdsChange?.((prev) => prev.filter((id) => id !== selectedId));
           onIsolatedNodeIdChange?.(selectedId);
           onSelectedNodeIdsChange?.([selectedId]);
-          setSelectedNode(null);
+          setInspectorSelection({ kind: "node", systemId: selectedId });
         }
         return;
       }
@@ -554,28 +559,14 @@ function NetworkGraphInner({
         event.preventDefault();
         setRelationshipSource(system);
         setRelationshipTarget(null);
-        setSelectedNode(null);
+        setInspectorSelection(emptyInspectorSelection());
         onSelectedNodeIdsChange?.([]);
         return;
       }
 
       if (key === "v" || event.key === "Enter") {
         event.preventDefault();
-        const flowNodes = getNodes();
-        const flowNode = flowNodes.find((n) => n.id === selectedId);
-        if (flowNode) {
-          const screenPos = flowToScreenPosition({
-            x: flowNode.position.x + NODE_WIDTH / 2,
-            y: flowNode.position.y + NODE_HEIGHT / 2,
-          });
-          setPopoverPos({ x: screenPos.x, y: screenPos.y });
-        } else {
-          setPopoverPos({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          });
-        }
-        setSelectedNode(system);
+        setInspectorSelection({ kind: "node", systemId: selectedId });
         return;
       }
     }
@@ -590,9 +581,8 @@ function NetworkGraphInner({
     contextMenu,
     relationshipTarget,
     relationshipSource,
+    onClearMapSelection,
     onSelectedNodeIdsChange,
-    groupedEdgeDetails,
-    closeConnectionEditor,
     resetRelationshipFlow,
     selectedNodeIds,
     hiddenNodeIdSet,
@@ -601,12 +591,10 @@ function NetworkGraphInner({
     allSystemsById,
     editSystemTarget,
     deleteSystemTarget,
-    editingConnectionId,
     onHiddenNodeIdsChange,
     onPinnedNodeIdsChange,
     onIsolatedNodeIdChange,
-    getNodes,
-    flowToScreenPosition,
+    setInspectorSelection,
   ]);
 
   const onNodeClick = useCallback((event, node) => {
@@ -621,7 +609,6 @@ function NetworkGraphInner({
       if (dx * dx + dy * dy > 25) return;
     }
     setContextMenu(null);
-    setGroupedEdgeDetails(null);
     const isMultiSelect = event.shiftKey || event.metaKey || event.ctrlKey;
     if (relationshipSource) {
       if (node.id === relationshipSource.id) {
@@ -629,7 +616,7 @@ function NetworkGraphInner({
         return;
       }
 
-      setSelectedNode(null);
+      setInspectorSelection(emptyInspectorSelection());
       onSelectedNodeIdsChange?.([]);
       setRelationshipTarget(node.data.system);
       setRelationshipTypeMenuPos({ x: event.clientX, y: event.clientY });
@@ -637,18 +624,23 @@ function NetworkGraphInner({
     }
 
     if (isMultiSelect) {
-      setSelectedNode(null);
-      onSelectedNodeIdsChange?.((prev) =>
-        prev.includes(node.id)
+      onSelectedNodeIdsChange?.((prev) => {
+        const next = prev.includes(node.id)
           ? prev.filter((id) => id !== node.id)
-          : [...prev, node.id]
-      );
+          : [...prev, node.id];
+        setInspectorSelection(inspectorSelectionFromNodeIds(next));
+        return next;
+      });
       return;
     }
 
-    setSelectedNode(null);
     onSelectedNodeIdsChange?.([node.id]);
-  }, [onSelectedNodeIdsChange, relationshipSource]);
+    setInspectorSelection(inspectorSelectionFromNodeIds([node.id]));
+  }, [
+    onSelectedNodeIdsChange,
+    relationshipSource,
+    setInspectorSelection,
+  ]);
 
   const onWrapperMouseDown = useCallback((event) => {
     nodeMouseDownPosRef.current = { x: event.clientX, y: event.clientY };
@@ -672,9 +664,7 @@ function NetworkGraphInner({
   const onNodeContextMenu = useCallback((event, node) => {
     event.preventDefault();
     event.stopPropagation();
-    setSelectedNode(null);
     setRelationshipTarget(null);
-    setGroupedEdgeDetails(null);
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -696,78 +686,36 @@ function NetworkGraphInner({
   ]);
 
   const onPaneClick = useCallback(() => {
-    setSelectedNode(null);
-    onSelectedNodeIdsChange?.([]);
+    onClearMapSelection?.();
     setContextMenu(null);
     setRelationshipTarget(null);
-    setGroupedEdgeDetails(null);
-    closeConnectionEditor();
     if (relationshipSource) {
       resetRelationshipFlow();
     }
-  }, [
-    closeConnectionEditor,
-    onSelectedNodeIdsChange,
-    relationshipSource,
-    resetRelationshipFlow,
-  ]);
+  }, [onClearMapSelection, relationshipSource, resetRelationshipFlow]);
 
   const onEdgeClick = useCallback(
-    (event, edge) => {
+    (_event, edge) => {
+      setContextMenu(null);
+      setRelationshipTarget(null);
       if (edgeDisplayMode !== "grouped") {
-        openConnectionEditor(edge.id);
+        onSelectedNodeIdsChange?.([]);
+        setInspectorSelection(edgeSelection(edge.id));
         return;
       }
       const groupedRelationships = edge.data?.groupedRelationships;
       if (!groupedRelationships || groupedRelationships.length === 0) return;
-      setSelectedNode(null);
-      setContextMenu(null);
-      setRelationshipTarget(null);
-      setGroupedEdgeDetails({
-        x: event.clientX,
-        y: event.clientY,
+      onSelectedNodeIdsChange?.([]);
+      setInspectorSelection({
+        kind: "groupedEdge",
+        sourceId: edge.source,
+        targetId: edge.target,
         sourceName: edge.data?.sourceName || "Unknown",
         targetName: edge.data?.targetName || "Unknown",
         relationships: groupedRelationships,
       });
     },
-    [edgeDisplayMode, openConnectionEditor]
-  );
-
-  const handleSaveConnectionEdit = useCallback(
-    (event) => {
-      event.preventDefault();
-      if (!editingConnection) return;
-      if (!editingConnectionType) return;
-      const hasDuplicate = allConnections.some(
-        (connection) =>
-          connection.id !== editingConnection.id &&
-          ((connection.sourceId === editingConnection.sourceId &&
-            connection.targetId === editingConnection.targetId) ||
-            (connection.sourceId === editingConnection.targetId &&
-              connection.targetId === editingConnection.sourceId)) &&
-          connection.type === editingConnectionType
-      );
-      if (hasDuplicate) {
-        toast.error("This connection already exists");
-        return;
-      }
-      updateConnection(editingConnection.id, {
-        type: editingConnectionType,
-        note: editingConnectionNote.trim() || null,
-      });
-      toast.success("Relationship updated");
-      closeConnectionEditor();
-      setGroupedEdgeDetails(null);
-    },
-    [
-      allConnections,
-      closeConnectionEditor,
-      editingConnection,
-      editingConnectionNote,
-      editingConnectionType,
-      updateConnection,
-    ]
+    [edgeDisplayMode, onSelectedNodeIdsChange, setInspectorSelection]
   );
 
   const handleContextMenuAction = useCallback((action) => {
@@ -782,14 +730,14 @@ function NetworkGraphInner({
       setRelationshipSource(contextMenu.system);
       setRelationshipTarget(null);
       setContextMenu(null);
-      setSelectedNode(null);
+      setInspectorSelection(emptyInspectorSelection());
       onSelectedNodeIdsChange?.([]);
       return;
     }
 
     if (action === "view-details") {
-      setSelectedNode(contextMenu.system);
-      setPopoverPos({ x: contextMenu.x, y: contextMenu.y });
+      onSelectedNodeIdsChange?.([contextMenu.system.id]);
+      setInspectorSelection({ kind: "node", systemId: contextMenu.system.id });
       setContextMenu(null);
       return;
     }
@@ -811,7 +759,7 @@ function NetworkGraphInner({
       if (selectedTargetIds.includes(isolatedNodeId)) {
         onIsolatedNodeIdChange?.(null);
       }
-      setSelectedNode(null);
+      setInspectorSelection(emptyInspectorSelection());
       setContextMenu(null);
       return;
     }
@@ -847,7 +795,7 @@ function NetworkGraphInner({
       onHiddenNodeIdsChange?.((prev) => prev.filter((id) => id !== targetId));
       onIsolatedNodeIdChange?.(targetId);
       onSelectedNodeIdsChange?.([targetId]);
-      setSelectedNode(null);
+      setInspectorSelection({ kind: "node", systemId: targetId });
       setContextMenu(null);
       return;
     }
@@ -859,24 +807,28 @@ function NetworkGraphInner({
     }
 
     if (action === "select-node") {
-      onSelectedNodeIdsChange?.((prev) =>
-        prev.includes(targetId) ? prev : [...prev, targetId]
-      );
-      setSelectedNode(null);
+      onSelectedNodeIdsChange?.((prev) => {
+        const next = prev.includes(targetId) ? prev : [...prev, targetId];
+        setInspectorSelection(inspectorSelectionFromNodeIds(next));
+        return next;
+      });
       setContextMenu(null);
       return;
     }
 
     if (action === "deselect-node") {
-      onSelectedNodeIdsChange?.((prev) => prev.filter((id) => id !== targetId));
-      setSelectedNode((prev) => (prev?.id === targetId ? null : prev));
+      onSelectedNodeIdsChange?.((prev) => {
+        const next = prev.filter((id) => id !== targetId);
+        setInspectorSelection(inspectorSelectionFromNodeIds(next));
+        return next;
+      });
       setContextMenu(null);
       return;
     }
 
     if (action === "clear-selection") {
       onSelectedNodeIdsChange?.([]);
-      setSelectedNode(null);
+      setInspectorSelection(emptyInspectorSelection());
       setContextMenu(null);
       return;
     }
@@ -894,6 +846,7 @@ function NetworkGraphInner({
     onSelectedNodeIdsChange,
     selectedNodeIdSet,
     selectedNodeIds,
+    setInspectorSelection,
   ]);
 
   const handleRelationshipTypeSelect = useCallback((type) => {
@@ -919,7 +872,7 @@ function NetworkGraphInner({
     const name = deleteSystemTarget.name;
     deleteSystem(deleteSystemTarget.id);
     setDeleteSystemTarget(null);
-    setSelectedNode(null);
+    setInspectorSelection(emptyInspectorSelection());
     onHiddenNodeIdsChange?.((prev) =>
       prev.filter((id) => id !== deleteSystemTarget.id)
     );
@@ -947,17 +900,16 @@ function NetworkGraphInner({
     relationshipSource,
     relationshipTarget,
     resetRelationshipFlow,
+    setInspectorSelection,
   ]);
 
   const handleSelectionChange = useCallback(
     ({ nodes: selectedFlowNodes = [] }) => {
       const ids = selectedFlowNodes.map((node) => node.id);
       onSelectedNodeIdsChange?.(ids);
-      if (ids.length !== 1) {
-        setSelectedNode(null);
-      }
+      setInspectorSelection(inspectorSelectionFromNodeIds(ids));
     },
-    [onSelectedNodeIdsChange]
+    [onSelectedNodeIdsChange, setInspectorSelection]
   );
 
   if (allSystems.length === 0) {
@@ -977,7 +929,11 @@ function NetworkGraphInner({
   }
 
   return (
-    <div className="relative h-full w-full" onMouseDown={onWrapperMouseDown}>
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col md:flex-row">
+      <div
+        className="relative min-h-0 min-w-0 flex-1"
+        onMouseDown={onWrapperMouseDown}
+      >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -1010,14 +966,6 @@ function NetworkGraphInner({
 
       <MapShortcutHints active={selectedNodeIds.length === 1} />
 
-      {selectedNode && (
-        <SystemNodePopover
-          system={selectedNode}
-          position={popoverPos}
-          onClose={() => setSelectedNode(null)}
-        />
-      )}
-
       <NetworkGraphContextMenu
         contextMenu={contextMenu}
         contextMenuRef={contextMenuRef}
@@ -1031,25 +979,6 @@ function NetworkGraphInner({
         relationshipTypeMenuRef={relationshipTypeMenuRef}
         onCancel={resetRelationshipFlow}
         onSelectType={handleRelationshipTypeSelect}
-      />
-
-      <NetworkGraphGroupedEdgeDetails
-        groupedEdgeDetails={groupedEdgeDetails}
-        groupedEdgeDetailsRef={groupedEdgeDetailsRef}
-        mutedEdgeColor={MUTED_EDGE_COLOR}
-        onOpenConnection={openConnectionEditor}
-      />
-
-      <NetworkGraphEditConnectionDialog
-        editingConnectionId={editingConnectionId}
-        editingSourceName={editingSourceName}
-        editingTargetName={editingTargetName}
-        editingConnectionType={editingConnectionType}
-        editingConnectionNote={editingConnectionNote}
-        setEditingConnectionType={setEditingConnectionType}
-        setEditingConnectionNote={setEditingConnectionNote}
-        onClose={closeConnectionEditor}
-        onSave={handleSaveConnectionEdit}
       />
 
       <SystemForm
@@ -1084,6 +1013,8 @@ function NetworkGraphInner({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
+      {renderInspector?.(inspectorHandlers)}
     </div>
   );
 }
